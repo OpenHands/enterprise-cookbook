@@ -72,6 +72,7 @@ Configure the agent and add custom tools.
 | [custom-agent-with-tool](./custom-agent-with-tool/) | Add custom server-side tools via source file upload + tool_module_qualnames |
 | [custom-agent-with-pip-tool](./custom-agent-with-pip-tool/) | Load a custom tool from a published pip package (pip install --target + tool_module_qualnames) |
 | [custom-system-prompt](./custom-system-prompt/) | Override the default OpenHands system prompt with a custom one for specialized agents (e.g., research assistant, code reviewer) |
+| [disabled-skills](./disabled-skills/) | Persist an account-level deny-list of skills so every conversation starts with them off (same call the UI Skills-Settings page makes) |
 
 ### Guardrails
 
