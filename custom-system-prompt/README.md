@@ -38,6 +38,120 @@ two structured fields:
 `system_message_suffix` is a *separate* field on the same request and is
 appended to the dynamic context; you can set both.
 
+## Anatomy of the default system prompt
+
+Before you replace the default prompt wholesale, it's worth knowing what
+you're displacing. The SDK composes the prompt from a small set of named,
+guarded sections. The references below are pinned to
+[`software-agent-sdk@v1.50.1`](https://github.com/OpenHands/software-agent-sdk/tree/v1.50.1)
+so the line numbers and content stay stable; bump the tag when auditing a
+newer release.
+
+### Two blocks on one system message
+
+The default agent ships the prompt as a `SystemPromptEvent` with two
+content blocks on a single `role: system` message
+([`event/llm_convertible/system.py`](https://github.com/OpenHands/software-agent-sdk/blob/v1.50.1/openhands-sdk/openhands/sdk/event/llm_convertible/system.py)):
+
+| Block | Field on the event | What it carries | Cacheable |
+|---|---|---|---|
+| 1 (static) | `system_prompt.text` | Identity, role, work habits, security policy, model-specific rules | **Yes** — marked `cache_prompt=True` |
+| 2 (dynamic) | `dynamic_context.text` | Current datetime, repo context, loaded `<SKILLS>`, custom `<CUSTOM_SECRETS>`, your `system_message_suffix` | **No** — left unmarked so the static prefix stays shared across conversations |
+
+The caching split is wired in
+[`llm/llm.py::_apply_prompt_caching`](https://github.com/OpenHands/software-agent-sdk/blob/v1.50.1/openhands-sdk/openhands/sdk/llm/llm.py)
+— for Anthropic-style prefix caching, only index 0 gets the cache marker.
+Every conversation your account starts can hit the same cached static
+block, which is the whole reason the two-block shape exists.
+
+### What goes into each block
+
+Static-tier sections live in
+[`context/prompts/sections/static.py`](https://github.com/OpenHands/software-agent-sdk/blob/v1.50.1/openhands-sdk/openhands/sdk/context/prompts/sections/static.py);
+dynamic-tier sections in
+[`context/prompts/sections/dynamic.py`](https://github.com/OpenHands/software-agent-sdk/blob/v1.50.1/openhands-sdk/openhands/sdk/context/prompts/sections/dynamic.py).
+The default composition order is pinned in
+[`context/prompts/presets.py`](https://github.com/OpenHands/software-agent-sdk/blob/v1.50.1/openhands-sdk/openhands/sdk/context/prompts/presets.py):
+
+**Static block, in order** — `<SOUL>` and `<ROLE>` (identity), `<MEMORY>`
+(AGENTS.md or persistent-memory guidance), `<EFFICIENCY>`,
+`<FILE_SYSTEM_GUIDELINES>`, `<CODE_QUALITY>`, `<VERSION_CONTROL>`,
+`<PULL_REQUESTS>`, `<PROBLEM_SOLVING_WORKFLOW>`, `<SELF_DOCUMENTATION>`
+(work habits), `<SECURITY>` and `<SECURITY_RISK_ASSESSMENT>` (safety
+policy), `<BROWSER_TOOLS>` (only if `enable_browser`),
+`<EXTERNAL_SERVICES>`, `<ENVIRONMENT_SETUP>`, `<TROUBLESHOOTING>`,
+`<PROCESS_MANAGEMENT>`, and `<IMPORTANT>` (per-model-family tweaks for
+Claude, Gemini, GPT-5).
+
+**Dynamic block, in order** — `<REPO_CONTEXT>`, `<MEMORY_CONTEXT>`,
+`<SKILLS>`, your `system_message_suffix` (raw, no wrapper),
+`<CUSTOM_SECRETS>`, and `<CURRENT_DATETIME>` **last** on purpose: it's
+the only per-conversation volatile value, so putting it at the tail keeps
+the stable dynamic content a cache-friendly prefix even on providers that
+cache the dynamic block too.
+
+Setting `system_prompt` on `POST /api/v1/app-conversations` **replaces the
+entire static block above** — all 17-ish sections, verbatim text and all —
+with your custom text. The dynamic block is unaffected.
+
+### Writing a custom `system_prompt` without breaking caching
+
+The static block's whole value is that it's the same bytes every time your
+account hits the LLM. Anthropic's prefix cache keys on the exact byte
+prefix: a one-character change splits one cached prefix into two, each
+with its own cold-start cost on the next miss. OpenAI's and Gemini's
+caches have the same shape of pitfall. So when you write your own
+`system_prompt`:
+
+- **Don't interpolate per-conversation volatile values** into the text.
+  No `datetime.now()`, no request id, no conversation id, no user email,
+  no repo URL, no sandbox id, no working directory. Any of these in the
+  static block means every conversation gets its own cache entry —
+  effectively no caching at all.
+- **Don't interpolate per-user profile fields** either (API key, display
+  name, org name). Even if the value changes rarely, it still shards the
+  cache per-user, and anything secret-shaped doesn't belong in a cached
+  blob.
+- **If you need date-aware behaviour, read the dynamic block.** The server
+  always appends `<CURRENT_DATETIME>` to `dynamic_context` — reference it
+  from the static text (e.g. "see `<CURRENT_DATETIME>` for today's date")
+  instead of baking a timestamp in.
+- **Keep the exact same bytes across runs that are logically "the same
+  agent".** If you tweak wording, do it on a deploy boundary, not inside
+  the request path.
+- **Front-load the parts you're least likely to edit.** On a tail-only
+  edit, the longest unchanged prefix still hits the cache; on a prefix
+  edit, nothing does.
+- **If you need per-conversation flavour, use `system_message_suffix`**
+  (goes into the uncached dynamic block) rather than templating it into
+  `system_prompt`.
+
+A sanity check: hash the string you're about to send
+(`hashlib.sha256(system_prompt.encode()).hexdigest()[:12]`) and log it. If
+that hash changes between two conversations that should be equivalent, you
+have a cache leak.
+
+### `system_prompt` vs. skills vs. `system_message_suffix` — when to use which
+
+All three let you shape the agent's instructions, but they pay very
+different context-window and caching costs:
+
+| Mechanism | Where it lands | Cost | Use for |
+|---|---|---|---|
+| `system_prompt` | Cached static block | Paid once per unique prompt, then free (within the cache window) | Identity, tone, hard rules, response format — things the agent should see on **every** turn of **every** conversation |
+| **Skills** (`disabled_skills` on the start request, or your own via the plugin / sandbox-upload paths) | Dynamic `<SKILLS>` block, with per-skill bodies loaded only on trigger | Catalog line costs tokens every turn; the full skill body only costs tokens on turns it fires | Specialised procedures, long reference material, service-specific recipes — things that matter **sometimes** |
+| `system_message_suffix` | Dynamic block (uncached), appended after `<CUSTOM_SECRETS>` | Paid every turn, every conversation it's set on | Short per-conversation nudges that compose with the default without rewriting the full static text |
+
+Rule of thumb — **if the instruction applies to every turn of every
+conversation this agent runs, it belongs in `system_prompt`. If it
+applies sometimes, make it a skill. If it's a one-conversation tweak,
+use `system_message_suffix`.**
+
+Resist the urge to pack long domain procedures into `system_prompt` just
+because it feels tidier. Every token in the static block is a token the
+LLM reads before responding to anything — a skill that fires on 1-in-20
+turns pays its full-body cost ~5% as often as the static block does.
+
 ## Prerequisites
 
 ```bash

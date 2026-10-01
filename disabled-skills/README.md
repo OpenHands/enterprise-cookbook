@@ -54,6 +54,108 @@ are matched exactly (case-sensitive) against the `<name>` values returned by
 microagents mixed in; pass a prefix like `?q=github` to see the skill names
 that appear in the `<SKILLS>` block).
 
+## ⚠ Caveat: deny-first means new OpenHands skills opt you in
+
+The current design is a **deny-list**, not an allow-list: anything that isn't
+explicitly disabled is loaded. That is deliberately drift-tolerant for most
+callers — a name you listed that no longer exists is a no-op, so your config
+survives rename/removal — but it has one consequence worth understanding
+before you ship this to production:
+
+> **When the OpenHands team adds a new built-in skill in a future SDK
+> release, every account whose `disabled_skills` doesn't name it will start
+> loading it on the next conversation, with no code change on your side.**
+
+For most teams that's the desired behaviour: you get new capabilities for
+free. But it's a problem when:
+
+- **Code (yours or an agent's) references skills by name.** A new skill
+  whose name collides with a trigger keyword or auto-injection rule you
+  depend on can start firing on turns it didn't fire on yesterday, changing
+  observable behaviour without a deploy on your side.
+- **The deny-list is policy, not preference.** If `disabled_skills` is
+  there because an auditor said "no external git integrations", the correct
+  guarantee is "no git integrations ever", not "no git integrations we knew
+  about at the time". A new `gerrit` or `codecommit` skill would quietly
+  bypass that intent.
+- **You need a stable per-turn context budget.** New skills (even if never
+  invoked) still show up in the `<SKILLS>` block of the dynamic context and
+  consume tokens.
+
+### Lock-down pattern: snapshot the catalog, then deny everything else
+
+When you need tight control, treat the current skill catalog as the
+authoritative set and deny everything in it except the names you want to
+keep. This inverts the deny-list into an effective allow-list while still
+using the only mechanism the server exposes.
+
+The authoritative source for "what skills does the agent see by default"
+is the `<SKILLS>` block of a `SystemPromptEvent` on a probe conversation
+started with **no** `disabled_skills` set. (`GET /api/v1/skills/search`
+without a `q` prefix returns microagents rather than the SDK skills that
+appear in `<SKILLS>`, so parsing the event is the reliable path — the
+same path `disabled_skills.py` uses to verify absence.)
+
+```python
+import re
+import requests
+
+headers = {"Authorization": f"Bearer {api_key}"}
+_SKILLS_BLOCK = re.compile(r"<SKILLS>(.*?)</SKILLS>", re.DOTALL)
+_SKILL_NAME = re.compile(r"<name>([^<]+)</name>")
+
+# 1. Clear any existing deny-list so the probe sees the full catalog.
+requests.post(
+    f"{base_url}/api/v1/settings", headers=headers, json={"disabled_skills": []},
+)
+
+# 2. Start a probe conversation and poll start-tasks until READY (omitted
+#    for brevity — see custom-system-prompt/custom_system_prompt.py).
+probe_conv_id = start_and_wait(base_url, headers)
+
+# 3. Read SystemPromptEvent and extract every <name> in <SKILLS>.
+event = requests.get(
+    f"{base_url}/api/v1/conversation/{probe_conv_id}/events/search",
+    headers=headers,
+    params={"kind__eq": "SystemPromptEvent", "limit": 1},
+).json()["items"][0]
+
+skills_block = _SKILLS_BLOCK.search(event["dynamic_context"]["text"]).group(1)
+all_skill_names = set(_SKILL_NAME.findall(skills_block))
+
+# 4. Decide the small set you *do* want.
+allowed = {"github", "linear", "uv"}
+
+# 5. Deny the complement.
+requests.post(
+    f"{base_url}/api/v1/settings",
+    headers=headers,
+    json={"disabled_skills": sorted(all_skill_names - allowed)},
+)
+```
+
+The probe is a one-time cost per catalog refresh; cache
+`all_skill_names` and reuse it until the next SDK upgrade.
+
+Operational notes for teams running this as policy:
+
+- **Re-snapshot on every SDK or platform upgrade.** A new build may ship
+  new skill names; your deny-list won't cover them until you refresh it.
+  Wire the snapshot step into your deploy pipeline (or run it on a
+  schedule) rather than treating the deny-list as set-and-forget.
+- **Diff before you apply.** `set(current) ^ set(snapshot)` tells you
+  exactly which skill names appeared or disappeared since the last run —
+  surface that in a code review or audit log so a human owns the decision
+  about any newcomer.
+- **The agent profile is the right place to persist a locked-down set.**
+  `POST /api/v1/settings/profiles/{name}` holds a `disabled_skills` list
+  that applies on top of the account-level one, so a `"locked-down"`
+  profile can carry the full complement without the account default
+  having to repeat it.
+
+An explicit allow-list field isn't currently exposed by the API; snapshot +
+deny-the-rest is the supported workaround.
+
 ## Prerequisites
 
 ```bash
