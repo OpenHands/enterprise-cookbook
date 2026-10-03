@@ -25,18 +25,15 @@ import json
 import logging
 import os
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request, BackgroundTasks
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-
-from database import Database, RequestStatus
-import logging
-
-logger = logging.getLogger(__name__)
 from conversation_manager import process_guide_request
+from database import Database, RequestStatus
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
 
 # =============================================================================
@@ -65,8 +62,9 @@ db = Database()
 # FastAPI App
 # =============================================================================
 
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     """App lifespan - startup and shutdown."""
     logger.info("Wanderlust MCP Server starting...")
     logger.info(f"OpenHands API URL: {OPENHANDS_API_URL}")
@@ -89,6 +87,7 @@ app = FastAPI(
 # Authentication
 # =============================================================================
 
+
 def verify_mcp_token(authorization: str | None) -> bool:
     """Verify the MCP authentication token."""
     if not authorization:
@@ -108,8 +107,10 @@ def verify_customer(customer_id: str, customer_secret: str) -> bool:
 # MCP Protocol Handlers
 # =============================================================================
 
+
 class MCPRequest(BaseModel):
     """MCP JSON-RPC request."""
+
     jsonrpc: str = "2.0"
     id: int | str | None = None
     method: str
@@ -216,6 +217,7 @@ MCP_TOOLS = [
 # Tool Implementations
 # =============================================================================
 
+
 async def handle_request_travel_guide(
     params: dict[str, Any],
     background_tasks: BackgroundTasks,
@@ -247,7 +249,10 @@ async def handle_request_travel_guide(
             "content": [
                 {
                     "type": "text",
-                    "text": "❌ Missing required fields: project_id, destination, and preferences are required.",
+                    "text": (
+                        "❌ Missing required fields: project_id, destination, "
+                        "and preferences are required."
+                    ),
                 }
             ],
             "isError": True,
@@ -260,7 +265,10 @@ async def handle_request_travel_guide(
             "content": [
                 {
                     "type": "text",
-                    "text": f"❌ Invalid project_id: '{project_id}'. Project not found or inactive.",
+                    "text": (
+                        f"❌ Invalid project_id: '{project_id}'. Project "
+                        "not found or inactive."
+                    ),
                 }
             ],
             "isError": True,
@@ -274,7 +282,10 @@ async def handle_request_travel_guide(
             "content": [
                 {
                     "type": "text",
-                    "text": "❌ Access denied. This project belongs to a different customer.",
+                    "text": (
+                        "❌ Access denied. This project belongs to a "
+                        "different customer."
+                    ),
                 }
             ],
             "isError": True,
@@ -286,7 +297,10 @@ async def handle_request_travel_guide(
             "content": [
                 {
                     "type": "text",
-                    "text": "❌ Server configuration error: OpenHands API key not configured.",
+                    "text": (
+                        "❌ Server configuration error: OpenHands API "
+                        "key not configured."
+                    ),
                 }
             ],
             "isError": True,
@@ -302,10 +316,15 @@ async def handle_request_travel_guide(
         public_conversation_id=None,  # No longer tracking this
     )
 
-    logger.info(f"Created guide request {request_id} for {destination} (project: {project_id}, sandbox: {sandbox_id})")
+    logger.info(
+        f"Created guide request {request_id} for {destination} (project: "
+        f"{project_id}, sandbox: {sandbox_id})"
+    )
 
     # Build callback URL for private conversation to call when done
-    callback_url = f"{MCP_SERVER_PUBLIC_URL}/guide-complete" if MCP_SERVER_PUBLIC_URL else ""
+    callback_url = (
+        f"{MCP_SERVER_PUBLIC_URL}/guide-complete" if MCP_SERVER_PUBLIC_URL else ""
+    )
 
     # Start background task to generate the guide
     background_tasks.add_task(
@@ -332,15 +351,17 @@ async def handle_request_travel_guide(
 
 **Request ID:** `{request_id}`
 **Destination:** {destination}
-**Style:** {preferences.replace('_', ' ').title()}
+**Style:** {preferences.replace("_", " ").title()}
 
 ⏱️ **Estimated time:** 2-3 minutes
 
-While our insider network curates your personalized guide, here are some things to discuss:
+While our insider network curates your personalized guide,
+here are some things to discuss:
 
 {suggestions}
 
-Use the `check_guide_status` tool with your request ID to see when your guide is ready!""",
+Use the `check_guide_status` tool with your request ID
+to see when your guide is ready!""",
             }
         ],
     }
@@ -383,7 +404,10 @@ async def handle_check_guide_status(params: dict[str, Any]) -> dict[str, Any]:
             "content": [
                 {
                     "type": "text",
-                    "text": "❌ Access denied. This request belongs to a different customer.",
+                    "text": (
+                        "❌ Access denied. This request belongs to a "
+                        "different customer."
+                    ),
                 }
             ],
             "isError": True,
@@ -397,7 +421,11 @@ async def handle_check_guide_status(params: dict[str, Any]) -> dict[str, Any]:
             "content": [
                 {
                     "type": "text",
-                    "text": f"⏳ **Status: Queued**\n\nYour guide for {destination} is waiting to be processed. Please check again in a moment.",
+                    "text": (
+                        f"⏳ **Status: Queued**\n\nYour guide for {destination} "
+                        "is waiting to be processed. Please check "
+                        "again in a moment."
+                    ),
                 }
             ],
         }
@@ -407,7 +435,11 @@ async def handle_check_guide_status(params: dict[str, Any]) -> dict[str, Any]:
             "content": [
                 {
                     "type": "text",
-                    "text": f"🔄 **Status: Generating**\n\nOur insider network is actively curating your {destination} guide. This usually takes 2-3 minutes total.",
+                    "text": (
+                        "🔄 **Status: Generating**\n\nOur insider network "
+                        f"is actively curating your {destination} guide. "
+                        "This usually takes 2-3 minutes total."
+                    ),
                 }
             ],
         }
@@ -419,12 +451,14 @@ async def handle_check_guide_status(params: dict[str, Any]) -> dict[str, Any]:
             sandbox_host="YOUR_SANDBOX_HOST"  # This would be dynamically determined
         )
 
-        guide_url = request.get('result_url')
+        guide_url = request.get("result_url")
         if guide_url:
             url_text = f"**Guide URL:** {guide_url}"
         else:
-            url_text = "**Note:** URL not available - guide is at /workspace/travel_guide.html"
-        
+            url_text = (
+                "**Note:** URL not available - guide is at /workspace/travel_guide.html"
+            )
+
         return {
             "content": [
                 {
@@ -447,7 +481,11 @@ Enjoy your journey! 🌟""",
             "content": [
                 {
                     "type": "text",
-                    "text": f"❌ **Status: Failed**\n\nUnfortunately, we couldn't generate your guide.\n\nError: {error}\n\nPlease try again or contact support.",
+                    "text": (
+                        "❌ **Status: Failed**\n\nUnfortunately, we "
+                        f"couldn't generate your guide.\n\nError: {error}\n\nPlease "
+                        "try again or contact support."
+                    ),
                 }
             ],
             "isError": True,
@@ -490,14 +528,18 @@ async def handle_list_my_requests(params: dict[str, Any]) -> dict[str, Any]:
             "content": [
                 {
                     "type": "text",
-                    "text": "📋 **Your Requests**\n\nYou don't have any travel guide requests yet. Use `request_travel_guide` to create one!",
+                    "text": (
+                        "📋 **Your Requests**\n\nYou don't have any "
+                        "travel guide requests yet. Use `request_travel_guide` "
+                        "to create one!"
+                    ),
                 }
             ],
         }
 
     # Format the request list
     lines = ["📋 **Your Recent Travel Guide Requests**\n"]
-    
+
     status_emoji = {
         "pending": "⏳",
         "processing": "🔄",
@@ -530,8 +572,10 @@ def get_waiting_suggestions(destination: str, preferences: str) -> str:
     """Get conversation suggestions while waiting for the guide."""
     base_tips = {
         "paris": [
-            "The best time to visit Paris is spring (April-June) or fall (September-November)",
-            "Consider getting a Paris Museum Pass if you plan to visit multiple attractions",
+            "The best time to visit Paris is spring (April-June) or "
+            "fall (September-November)",
+            "Consider getting a Paris Museum Pass if you plan to visit "
+            "multiple attractions",
             "The metro is the most efficient way to get around the city",
         ],
         "tokyo": [
@@ -545,7 +589,8 @@ def get_waiting_suggestions(destination: str, preferences: str) -> str:
             "The subway runs 24/7, unlike most other cities",
         ],
         "rome": [
-            "Book tickets in advance for popular attractions like the Vatican and Colosseum",
+            "Book tickets in advance for popular attractions like the "
+            "Vatican and Colosseum",
             "Restaurants near major tourist sites are often tourist traps",
             "The historic center is very walkable",
         ],
@@ -564,20 +609,27 @@ def get_waiting_suggestions(destination: str, preferences: str) -> str:
     preference_tips = {
         "foodie_adventure": "Ask me about local food etiquette or must-try dishes!",
         "romantic_getaway": "I can suggest some romantic activities or scenic spots!",
-        "cultural_exploration": "Would you like to know about local customs or hidden museums?",
+        "cultural_exploration": (
+            "Would you like to know about local customs or hidden museums?"
+        ),
         "budget_travel": "I have tips for saving money without missing out!",
         "nightlife": "Ask about the best neighborhoods for nightlife!",
         "beach_relaxation": "I can recommend the best beaches and sunset spots!",
     }
 
     dest_lower = destination.lower()
-    tips = base_tips.get(dest_lower, [
-        "Research local customs before you arrive",
-        "Download offline maps for when you don't have data",
-        "Learn a few basic phrases in the local language",
-    ])
+    tips = base_tips.get(
+        dest_lower,
+        [
+            "Research local customs before you arrive",
+            "Download offline maps for when you don't have data",
+            "Learn a few basic phrases in the local language",
+        ],
+    )
 
-    pref_tip = preference_tips.get(preferences, "Feel free to ask me anything about your trip!")
+    pref_tip = preference_tips.get(
+        preferences, "Feel free to ask me anything about your trip!"
+    )
 
     tips_text = "\n".join(f"• {tip}" for tip in tips[:3])
     return f"""**Quick tips for {destination}:**
@@ -590,25 +642,19 @@ def get_waiting_suggestions(destination: str, preferences: str) -> str:
 # MCP Endpoints (SSE Transport)
 # =============================================================================
 
-# SSE client management
-import asyncio
-from collections import defaultdict
-from typing import AsyncGenerator
-from fastapi.responses import StreamingResponse
-
 # Store for SSE clients: session_id -> asyncio.Queue
 sse_clients: dict[str, asyncio.Queue] = {}
 sse_lock = asyncio.Lock()
 
 
 async def process_mcp_request(
-    body: dict, 
+    body: dict,
     background_tasks: BackgroundTasks,
     customer_id: str | None = None,
     project_id: str | None = None,
 ) -> dict:
     """Process an MCP JSON-RPC request and return the response.
-    
+
     Args:
         body: JSON-RPC request body
         background_tasks: FastAPI background tasks
@@ -623,14 +669,17 @@ async def process_mcp_request(
 
     # Handle methods
     if method == "initialize":
-        return mcp_response(request_id, {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {}},
-            "serverInfo": {
-                "name": "wanderlust-travel",
-                "version": "0.1.0",
+        return mcp_response(
+            request_id,
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {
+                    "name": "wanderlust-travel",
+                    "version": "0.1.0",
+                },
             },
-        })
+        )
 
     elif method == "notifications/initialized":
         return mcp_response(request_id, {})
@@ -641,7 +690,7 @@ async def process_mcp_request(
     elif method == "tools/call":
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
-        
+
         # Inject credentials from headers into arguments (headers take precedence)
         # This works around the SDK not expanding secrets in MCP tool params
         if customer_id:
@@ -737,11 +786,11 @@ async def handle_mcp(
     - notifications/initialized
     - tools/list
     - tools/call
-    
+
     Customer credentials can be passed via headers (recommended):
     - X-Customer-ID: Customer identifier
     - X-Project-ID: Project identifier
-    
+
     If session parameter is provided, responses are sent via SSE.
     Otherwise, response is returned directly (for simple HTTP mode).
     """
@@ -762,15 +811,18 @@ async def handle_mcp(
 
     # Log header credentials if present
     if x_customer_id or x_project_id:
-        logger.info(f"MCP request with header credentials: customer={x_customer_id}, project={x_project_id}")
+        logger.info(
+            f"MCP request with header credentials: customer={x_customer_id}, "
+            f"project={x_project_id}"
+        )
 
     response = await process_mcp_request(
-        body, 
+        body,
         background_tasks,
         customer_id=x_customer_id,
         project_id=x_project_id,
     )
-    
+
     # If session provided, send response via SSE channel
     if session:
         async with sse_lock:
@@ -778,7 +830,7 @@ async def handle_mcp(
                 await sse_clients[session].put(response)
                 # Return 202 Accepted - response sent via SSE
                 return JSONResponse({"status": "accepted"}, status_code=202)
-    
+
     # Otherwise return response directly
     return JSONResponse(response)
 
@@ -813,8 +865,10 @@ async def root():
 # Project Management API (for demo host)
 # =============================================================================
 
+
 class CreateProjectRequest(BaseModel):
     """Request to create/seed a project."""
+
     project_id: str
     sandbox_id: str
     customer_id: str
@@ -828,7 +882,7 @@ async def create_project(
 ):
     """
     Create a project mapping project_id to sandbox_id.
-    
+
     Called by the demo host to seed the database before starting
     the customer conversation. Requires MCP auth token.
     """
@@ -840,8 +894,7 @@ async def create_project(
     existing = db.get_project(request.project_id)
     if existing:
         raise HTTPException(
-            status_code=409,
-            detail=f"Project '{request.project_id}' already exists"
+            status_code=409, detail=f"Project '{request.project_id}' already exists"
         )
 
     # Create the project
@@ -904,8 +957,10 @@ async def deactivate_project(
 # Guide Completion Callback (called by private conversation)
 # =============================================================================
 
+
 class GuideCompleteRequest(BaseModel):
     """Request body for guide completion callback."""
+
     request_id: str
     guide_url: str
     destination: str | None = None
@@ -918,44 +973,41 @@ async def guide_complete(
 ):
     """
     Callback endpoint for private conversation to signal guide completion.
-    
+
     Called by the proprietary plugin when the travel guide is ready:
     - Updates the guide request status to 'completed'
     - Stores the full public URL
-    
+
     The private conversation calls this directly instead of relying on
     polling/detection logic.
     """
     # Verify MCP token (same auth as other endpoints)
     if not verify_mcp_token(authorization):
         raise HTTPException(status_code=401, detail="Invalid or missing auth token")
-    
+
     # Look up the request
     guide_request = db.get_guide_request(request.request_id)
     if not guide_request:
         raise HTTPException(
-            status_code=404, 
-            detail=f"Guide request '{request.request_id}' not found"
+            status_code=404, detail=f"Guide request '{request.request_id}' not found"
         )
-    
+
     # Update status to completed with the URL
     success = db.update_guide_request_status(
         request.request_id,
         RequestStatus.COMPLETED,
         result_url=request.guide_url,
     )
-    
+
     if not success:
         raise HTTPException(
-            status_code=500,
-            detail="Failed to update guide request status"
+            status_code=500, detail="Failed to update guide request status"
         )
-    
+
     logger.info(
-        f"Guide complete: request={request.request_id}, "
-        f"url={request.guide_url}"
+        f"Guide complete: request={request.request_id}, url={request.guide_url}"
     )
-    
+
     return {
         "status": "ok",
         "request_id": request.request_id,
@@ -967,9 +1019,11 @@ async def guide_complete(
 # Main
 # =============================================================================
 
+
 def main():
     """Run the server."""
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)
 
 

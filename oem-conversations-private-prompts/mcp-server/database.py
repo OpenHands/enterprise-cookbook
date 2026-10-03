@@ -18,10 +18,11 @@ from typing import Any
 
 class RequestStatus(str, Enum):
     """Status of a guide generation request."""
-    PENDING = "pending"           # Request received, not yet started
-    PROCESSING = "processing"     # Private conversation is working
-    COMPLETED = "completed"       # Guide generated successfully
-    FAILED = "failed"             # Generation failed
+
+    PENDING = "pending"  # Request received, not yet started
+    PROCESSING = "processing"  # Private conversation is working
+    COMPLETED = "completed"  # Guide generated successfully
+    FAILED = "failed"  # Generation failed
 
 
 class Database:
@@ -67,7 +68,7 @@ class Database:
                     preferences TEXT NOT NULL,
                     customer_name TEXT,
                     status TEXT DEFAULT 'pending',
-                    result_url TEXT,  -- Full public URL to the guide (served by private conv)
+                    result_url TEXT,  -- public guide URL (served by private conv)
                     error_message TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     started_at TIMESTAMP,
@@ -77,20 +78,21 @@ class Database:
                 );
 
                 -- Index for efficient status queries
-                CREATE INDEX IF NOT EXISTS idx_guide_requests_status 
+                CREATE INDEX IF NOT EXISTS idx_guide_requests_status
                     ON guide_requests(status);
-                CREATE INDEX IF NOT EXISTS idx_guide_requests_customer 
+                CREATE INDEX IF NOT EXISTS idx_guide_requests_customer
                     ON guide_requests(customer_id);
-                CREATE INDEX IF NOT EXISTS idx_guide_requests_sandbox 
+                CREATE INDEX IF NOT EXISTS idx_guide_requests_sandbox
                     ON guide_requests(sandbox_id);
-                CREATE INDEX IF NOT EXISTS idx_guide_requests_project 
+                CREATE INDEX IF NOT EXISTS idx_guide_requests_project
                     ON guide_requests(project_id);
-                CREATE INDEX IF NOT EXISTS idx_projects_sandbox 
+                CREATE INDEX IF NOT EXISTS idx_projects_sandbox
                     ON projects(sandbox_id);
 
                 -- Insert demo customers if they don't exist
-                INSERT OR IGNORE INTO customers (customer_id, customer_secret_hash, name)
-                VALUES 
+                INSERT OR IGNORE INTO customers
+                    (customer_id, customer_secret_hash, name)
+                VALUES
                     ('demo-customer-001', 'demo-secret-hash-001', 'Demo Travel Agency'),
                     ('test-customer-002', 'test-secret-hash-002', 'Test Corp');
             """)
@@ -126,8 +128,7 @@ class Database:
         """Get customer by ID."""
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM customers WHERE customer_id = ?",
-                (customer_id,)
+                "SELECT * FROM customers WHERE customer_id = ?", (customer_id,)
             ).fetchone()
             return dict(row) if row else None
 
@@ -147,13 +148,21 @@ class Database:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO guide_requests 
-                (id, customer_id, sandbox_id, public_conversation_id, 
+                INSERT INTO guide_requests
+                (id, customer_id, sandbox_id, public_conversation_id,
                  destination, preferences, customer_name, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (request_id, customer_id, sandbox_id, public_conversation_id,
-                 destination, preferences, customer_name, RequestStatus.PENDING.value)
+                (
+                    request_id,
+                    customer_id,
+                    sandbox_id,
+                    public_conversation_id,
+                    destination,
+                    preferences,
+                    customer_name,
+                    RequestStatus.PENDING.value,
+                ),
             )
         return request_id
 
@@ -161,8 +170,7 @@ class Database:
         """Get a guide request by ID."""
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM guide_requests WHERE id = ?",
-                (request_id,)
+                "SELECT * FROM guide_requests WHERE id = ?", (request_id,)
             ).fetchone()
             return dict(row) if row else None
 
@@ -202,8 +210,7 @@ class Database:
             params.append(request_id)
 
             cursor = conn.execute(
-                f"UPDATE guide_requests SET {', '.join(updates)} WHERE id = ?",
-                params
+                f"UPDATE guide_requests SET {', '.join(updates)} WHERE id = ?", params
             )
             return cursor.rowcount > 0
 
@@ -212,7 +219,7 @@ class Database:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM guide_requests WHERE status = ? ORDER BY created_at",
-                (RequestStatus.PENDING.value,)
+                (RequestStatus.PENDING.value,),
             ).fetchall()
             return [dict(row) for row in rows]
 
@@ -220,8 +227,9 @@ class Database:
         """Get all guide requests for a sandbox."""
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM guide_requests WHERE sandbox_id = ? ORDER BY created_at DESC",
-                (sandbox_id,)
+                "SELECT * FROM guide_requests WHERE sandbox_id = ? "
+                "ORDER BY created_at DESC",
+                (sandbox_id,),
             ).fetchall()
             return [dict(row) for row in rows]
 
@@ -234,12 +242,12 @@ class Database:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM guide_requests 
-                WHERE customer_id = ? 
-                ORDER BY created_at DESC 
+                SELECT * FROM guide_requests
+                WHERE customer_id = ?
+                ORDER BY created_at DESC
                 LIMIT ?
                 """,
-                (customer_id, limit)
+                (customer_id, limit),
             ).fetchall()
             return [dict(row) for row in rows]
 
@@ -254,17 +262,18 @@ class Database:
     ) -> str:
         """
         Create a new project mapping project_id to sandbox_id.
-        
+
         Called by the demo host to seed the database before
         starting the customer conversation.
         """
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO projects (project_id, sandbox_id, customer_id, customer_name)
+                INSERT INTO projects
+                    (project_id, sandbox_id, customer_id, customer_name)
                 VALUES (?, ?, ?, ?)
                 """,
-                (project_id, sandbox_id, customer_id, customer_name)
+                (project_id, sandbox_id, customer_id, customer_name),
             )
         return project_id
 
@@ -273,7 +282,7 @@ class Database:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM projects WHERE project_id = ? AND active = 1",
-                (project_id,)
+                (project_id,),
             ).fetchone()
             return dict(row) if row else None
 
@@ -282,7 +291,7 @@ class Database:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM projects WHERE sandbox_id = ? AND active = 1",
-                (sandbox_id,)
+                (sandbox_id,),
             ).fetchone()
             return dict(row) if row else None
 
@@ -290,15 +299,14 @@ class Database:
         """Mark a project as inactive (soft delete)."""
         with self._connect() as conn:
             cursor = conn.execute(
-                "UPDATE projects SET active = 0 WHERE project_id = ?",
-                (project_id,)
+                "UPDATE projects SET active = 0 WHERE project_id = ?", (project_id,)
             )
             return cursor.rowcount > 0
 
     def get_sandbox_id_for_project(self, project_id: str) -> str | None:
         """
         Look up sandbox_id for a given project_id.
-        
+
         This is the key lookup used by request_travel_guide
         to determine which sandbox to use for the private conversation.
         """

@@ -15,17 +15,19 @@ import tempfile
 import pytest
 from fastapi.testclient import TestClient
 
+
 # Set test environment before importing server
 os.environ["MCP_AUTH_TOKEN"] = "test-mcp-token"
 os.environ["OPENHANDS_API_KEY"] = "test-api-key"
 
 from database import Database, RequestStatus
-from server import app, MCP_AUTH_TOKEN
+from server import MCP_AUTH_TOKEN, app
 
 
 # =============================================================================
 # Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def client():
@@ -53,6 +55,7 @@ def temp_db():
 # Health Check Tests
 # =============================================================================
 
+
 class TestHealthCheck:
     def test_health_endpoint(self, client):
         """Test the health check endpoint."""
@@ -76,14 +79,18 @@ class TestHealthCheck:
 # MCP Protocol Tests
 # =============================================================================
 
+
 class TestMCPProtocol:
     def test_mcp_without_auth(self, client):
         """Test MCP endpoint requires authentication."""
-        resp = client.post("/mcp", json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-        })
+        resp = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+            },
+        )
         assert resp.status_code == 401
 
     def test_mcp_with_wrong_token(self, client):
@@ -141,6 +148,7 @@ class TestMCPProtocol:
 # =============================================================================
 # Tool Call Tests
 # =============================================================================
+
 
 class TestToolCalls:
     def test_request_travel_guide_invalid_customer(self, client, auth_headers):
@@ -300,11 +308,14 @@ class TestToolCalls:
 # Database Tests
 # =============================================================================
 
+
 class TestDatabase:
     def test_customer_validation_valid(self, temp_db):
         """Test validating correct customer credentials."""
         # Demo customer: secret should be "{customer_id}-secret"
-        assert temp_db.validate_customer("demo-customer-001", "demo-customer-001-secret")
+        assert temp_db.validate_customer(
+            "demo-customer-001", "demo-customer-001-secret"
+        )
 
     def test_customer_validation_invalid(self, temp_db):
         """Test validating incorrect customer credentials."""
@@ -321,7 +332,7 @@ class TestDatabase:
             customer_name="Test User",
         )
         assert request_id is not None
-        
+
         # Verify we can retrieve it
         request = temp_db.get_guide_request(request_id)
         assert request is not None
@@ -337,14 +348,14 @@ class TestDatabase:
             destination="Tokyo",
             preferences="nightlife",
         )
-        
+
         # Update to processing
         temp_db.update_guide_request_status(
             request_id,
             RequestStatus.PROCESSING,
             private_conversation_id="conv-123",
         )
-        
+
         request = temp_db.get_guide_request(request_id)
         assert request["status"] == RequestStatus.PROCESSING.value
         assert request["private_conversation_id"] == "conv-123"
@@ -356,7 +367,7 @@ class TestDatabase:
             RequestStatus.COMPLETED,
             result_path="/workspace/travel_guide.html",
         )
-        
+
         request = temp_db.get_guide_request(request_id)
         assert request["status"] == RequestStatus.COMPLETED.value
         assert request["result_path"] == "/workspace/travel_guide.html"
@@ -375,7 +386,7 @@ class TestDatabase:
 
         requests = temp_db.get_requests_by_customer("demo-customer-001")
         assert len(requests) == 3
-        
+
         # Verify all cities are present (order may vary when created at same timestamp)
         destinations = set(r["destination"] for r in requests)
         assert destinations == {"Paris", "Tokyo", "Rome"}

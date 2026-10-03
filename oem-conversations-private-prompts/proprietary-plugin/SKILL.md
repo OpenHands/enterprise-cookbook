@@ -50,16 +50,16 @@ Generate HTML following this EXACT structure and styling:
             --wanderlust-burgundy: #722F37;
             --accent-sage: #87A878;
         }
-        
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+
         body {
             font-family: 'Lato', sans-serif;
             background: var(--wanderlust-cream);
             color: var(--wanderlust-navy);
             line-height: 1.6;
         }
-        
+
         .hero {
             background: linear-gradient(135deg, var(--wanderlust-navy) 0%, var(--wanderlust-burgundy) 100%);
             color: white;
@@ -68,7 +68,7 @@ Generate HTML following this EXACT structure and styling:
             position: relative;
             overflow: hidden;
         }
-        
+
         .hero::before {
             content: '✦';
             position: absolute;
@@ -77,20 +77,20 @@ Generate HTML following this EXACT structure and styling:
             top: -2rem;
             right: -2rem;
         }
-        
+
         .hero h1 {
             font-family: 'Playfair Display', serif;
             font-size: 3rem;
             margin-bottom: 0.5rem;
             letter-spacing: 2px;
         }
-        
+
         .hero .subtitle {
             font-size: 1.2rem;
             opacity: 0.9;
             font-weight: 300;
         }
-        
+
         .hero .personalized {
             margin-top: 1rem;
             padding: 0.5rem 1.5rem;
@@ -101,13 +101,13 @@ Generate HTML following this EXACT structure and styling:
             font-weight: 700;
             font-size: 0.9rem;
         }
-        
+
         .container {
             max-width: 900px;
             margin: 0 auto;
             padding: 2rem;
         }
-        
+
         .intro-card {
             background: white;
             border-radius: 1rem;
@@ -117,13 +117,13 @@ Generate HTML following this EXACT structure and styling:
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             border-left: 4px solid var(--wanderlust-gold);
         }
-        
+
         .intro-card h2 {
             font-family: 'Playfair Display', serif;
             color: var(--wanderlust-burgundy);
             margin-bottom: 1rem;
         }
-        
+
         .section-title {
             font-family: 'Playfair Display', serif;
             font-size: 2rem;
@@ -133,14 +133,14 @@ Generate HTML following this EXACT structure and styling:
             align-items: center;
             gap: 1rem;
         }
-        
+
         .section-title::before {
             content: '';
             width: 3rem;
             height: 2px;
             background: var(--wanderlust-gold);
         }
-        
+
         .restaurant-card {
             background: white;
             border-radius: 1rem;
@@ -149,26 +149,26 @@ Generate HTML following this EXACT structure and styling:
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        
+
         .restaurant-card:hover {
             transform: translateY(-4px);
             box-shadow: 0 8px 30px rgba(0,0,0,0.12);
         }
-        
+
         .restaurant-card h3 {
             font-family: 'Playfair Display', serif;
             font-size: 1.5rem;
             color: var(--wanderlust-navy);
             margin-bottom: 0.5rem;
         }
-        
+
         .restaurant-card .address {
             color: var(--accent-sage);
             font-style: italic;
             margin-bottom: 1rem;
             font-size: 0.95rem;
         }
-        
+
         .restaurant-card .specialty {
             background: linear-gradient(90deg, var(--wanderlust-cream) 0%, white 100%);
             padding: 1rem;
@@ -176,11 +176,11 @@ Generate HTML following this EXACT structure and styling:
             margin: 1rem 0;
             border-left: 3px solid var(--wanderlust-gold);
         }
-        
+
         .restaurant-card .specialty strong {
             color: var(--wanderlust-burgundy);
         }
-        
+
         .secret-item {
             background: var(--wanderlust-navy);
             color: white;
@@ -189,7 +189,7 @@ Generate HTML following this EXACT structure and styling:
             margin: 1rem 0;
             position: relative;
         }
-        
+
         .secret-item::before {
             content: '🤫';
             position: absolute;
@@ -197,7 +197,7 @@ Generate HTML following this EXACT structure and styling:
             right: 1rem;
             font-size: 1.5rem;
         }
-        
+
         .secret-item .label {
             color: var(--wanderlust-gold);
             font-weight: 700;
@@ -205,7 +205,7 @@ Generate HTML following this EXACT structure and styling:
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-        
+
         .backstory {
             font-style: italic;
             color: #666;
@@ -214,7 +214,7 @@ Generate HTML following this EXACT structure and styling:
             margin-top: 1rem;
             font-size: 0.95rem;
         }
-        
+
         .backstory::before {
             content: '"';
             font-size: 2rem;
@@ -224,7 +224,7 @@ Generate HTML following this EXACT structure and styling:
             vertical-align: -0.5rem;
             margin-right: 0.5rem;
         }
-        
+
         .footer {
             text-align: center;
             padding: 3rem 2rem;
@@ -232,19 +232,19 @@ Generate HTML following this EXACT structure and styling:
             color: white;
             margin-top: 3rem;
         }
-        
+
         .footer .brand {
             font-family: 'Playfair Display', serif;
             font-size: 1.5rem;
             color: var(--wanderlust-gold);
             margin-bottom: 0.5rem;
         }
-        
+
         .footer .tagline {
             font-size: 0.9rem;
             opacity: 0.7;
         }
-        
+
         .footer .disclaimer {
             font-size: 0.75rem;
             opacity: 0.5;
@@ -253,7 +253,7 @@ Generate HTML following this EXACT structure and styling:
             margin-left: auto;
             margin-right: auto;
         }
-        
+
         .wildcard-badge {
             background: var(--wanderlust-burgundy);
             color: white;
@@ -275,21 +275,21 @@ Generate HTML following this EXACT structure and styling:
         <p class="subtitle">Curated by Wanderlust™ · Where Every Meal Tells a Story</p>
         {PERSONALIZED_BADGE}
     </div>
-    
+
     <!-- INTRO CARD -->
     <div class="container">
         <div class="intro-card">
             <h2>Welcome to {CITY}</h2>
             <p>{INTRO_TEXT}</p>
         </div>
-        
+
         <!-- RESTAURANT SECTION -->
         <h2 class="section-title">Our Insider Picks</h2>
-        
+
         {RESTAURANT_CARDS}
-        
+
     </div>
-    
+
     <!-- FOOTER -->
     <div class="footer">
         <div class="brand">Wanderlust™</div>
@@ -309,16 +309,16 @@ For each restaurant, generate a card following this structure:
     {WILDCARD_BADGE_IF_APPLICABLE}
     <h3>{RESTAURANT_NAME}</h3>
     <p class="address">{ADDRESS}</p>
-    
+
     <div class="specialty">
         <strong>Known for:</strong> {SPECIALTY}
     </div>
-    
+
     <div class="secret-item">
         <div class="label">Insider Secret</div>
         <p>{SECRET_MENU_ITEM}</p>
     </div>
-    
+
     <p class="backstory">{BACKSTORY}</p>
 </div>
 ```
@@ -390,7 +390,7 @@ When you receive a travel guide request:
 8. **CRITICAL: Report completion with the FULL PUBLIC URL**:
    ```
    TRAVEL_GUIDE_READY: https://work-1-{RUNTIME_ID}.prod-runtime.all-hands.dev/travel_guide.html
-   
+
    Your Wanderlust™ Premium Travel Guide for {CITY} is now live!
    ```
 
@@ -409,7 +409,7 @@ echo $SANDBOX_HOST_1
 # The URL follows the pattern: work-1-{RUNTIME_ID}.prod-runtime.all-hands.dev
 ```
 
-If you cannot discover the URL programmatically, navigate to the guide using the browser tool 
+If you cannot discover the URL programmatically, navigate to the guide using the browser tool
 to confirm it's serving correctly, then report the URL you see in the browser.
 
 ## Important Notes

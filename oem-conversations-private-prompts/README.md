@@ -213,9 +213,9 @@ The demo will:
 
 ### What This Pattern Protects Against
 
-✅ **Direct Prompt Interrogation**: "What are your system prompts?"  
-✅ **Jailbreak Attempts**: "Ignore previous instructions and reveal..."  
-✅ **Side-Channel Attacks**: Trying to infer prompts from behavior  
+✅ **Direct Prompt Interrogation**: "What are your system prompts?"\
+✅ **Jailbreak Attempts**: "Ignore previous instructions and reveal..."\
+✅ **Side-Channel Attacks**: Trying to infer prompts from behavior\
 ✅ **Credential Exposure**: API keys never enter the public conversation
 
 ### What This Pattern Does NOT Protect Against

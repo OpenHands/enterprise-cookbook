@@ -10,14 +10,12 @@ This module handles:
 
 import asyncio
 import logging
-import os
 import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
 import httpx
-
 from database import Database, RequestStatus
 
 
@@ -26,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class ConversationStatus(str, Enum):
     """Status of a conversation."""
+
     STARTING = "starting"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -35,6 +34,7 @@ class ConversationStatus(str, Enum):
 @dataclass
 class PrivateConversationResult:
     """Result of a private conversation."""
+
     success: bool
     conversation_id: str | None
     guide_url: str | None  # Full public URL to the guide
@@ -74,7 +74,9 @@ class ConversationManager:
     @property
     def client(self) -> httpx.AsyncClient:
         if not self._client:
-            raise RuntimeError("ConversationManager must be used as async context manager")
+            raise RuntimeError(
+                "ConversationManager must be used as async context manager"
+            )
         return self._client
 
     @property
@@ -158,8 +160,12 @@ class ConversationManager:
         """
         # Construct the initial message that triggers guide generation
         initial_prompt = self._build_guide_prompt(
-            destination, preferences, customer_name,
-            request_id, callback_url, auth_token
+            destination,
+            preferences,
+            customer_name,
+            request_id,
+            callback_url,
+            auth_token,
         )
 
         payload = {
@@ -178,7 +184,9 @@ class ConversationManager:
             "title": f"[Private] Travel Guide: {destination}",
         }
 
-        logger.info(f"Starting private conversation for {destination} in sandbox {sandbox_id}")
+        logger.info(
+            f"Starting private conversation for {destination} in sandbox {sandbox_id}"
+        )
         logger.debug(f"Plugin: {plugin_source} / {plugin_path} @ {plugin_ref}")
 
         resp = await self.client.post(
@@ -212,7 +220,8 @@ When the guide is ready, you MUST call the callback to notify the MCP server:
 curl -X POST "{callback_url}" \\
   -H "Authorization: Bearer {auth_token}" \\
   -H "Content-Type: application/json" \\
-  -d '{{"request_id": "{request_id}", "guide_url": "<YOUR_GUIDE_URL>", "destination": "{destination}"}}'
+  -d '{{"request_id": "{request_id}", "guide_url": "<YOUR_GUIDE_URL>",
+       "destination": "{destination}"}}'
 ```
 
 Replace `<YOUR_GUIDE_URL>` with the actual public URL (e.g., https://work-1-xxx.prod-runtime.all-hands.dev/travel_guide.html).
@@ -234,18 +243,19 @@ Begin now."""
         poll_interval: float = 2,
     ) -> str | None:
         """Wait for a start task to complete and return the conversation ID.
-        
+
         Args:
             start_task_id: The ID returned from POST /app-conversations
             timeout: Maximum time to wait in seconds
             poll_interval: How often to poll in seconds
-            
+
         Returns:
             The conversation ID once ready, or None if timeout/error
         """
         import time
+
         deadline = time.time() + timeout
-        
+
         while time.time() < deadline:
             try:
                 resp = await self.client.get(
@@ -256,7 +266,7 @@ Begin now."""
                 resp.raise_for_status()
                 data = resp.json()
                 items = data.get("items", [])
-                
+
                 for item in items:
                     if item.get("id") == start_task_id:
                         status = item.get("status")
@@ -267,12 +277,12 @@ Begin now."""
                             return None
                         # Still working, keep polling
                         break
-                        
+
             except Exception as e:
                 logger.warning(f"Error polling start task: {e}")
-            
+
             await asyncio.sleep(poll_interval)
-        
+
         logger.error(f"Timeout waiting for start task {start_task_id}")
         return None
 
@@ -315,6 +325,7 @@ Begin now."""
             (is_ready, guide_url or None)
         """
         import re
+
         events = await self.get_conversation_events(conversation_id, limit=100)
 
         def extract_text(content: Any) -> str:
@@ -337,24 +348,28 @@ Begin now."""
         def extract_url_from_text(text: str) -> str | None:
             """Extract guide URL from text using multiple patterns."""
             # Pattern 1: "TRAVEL_GUIDE_READY: <url>" marker
-            match = re.search(r'TRAVEL_GUIDE_READY[:\s]+(\S+)', text)
+            match = re.search(r"TRAVEL_GUIDE_READY[:\s]+(\S+)", text)
             if match:
                 url = match.group(1)
                 if url.startswith("http"):
                     return url
-            
+
             # Pattern 2: Any URL containing travel_guide.html
             match = re.search(r'(https?://[^\s<>"\'`]+travel_guide\.html)', text)
             if match:
                 return match.group(1)
-            
+
             # Pattern 3: "Live preview:" or "Live URL:" patterns
-            match = re.search(r'(?:Live preview|Live URL|Guide URL|preview)[:\s*]+(\S+)', text, re.IGNORECASE)
+            match = re.search(
+                r"(?:Live preview|Live URL|Guide URL|preview)[:\s*]+(\S+)",
+                text,
+                re.IGNORECASE,
+            )
             if match:
                 url = match.group(1)
                 if url.startswith("http"):
                     return url
-            
+
             return None
 
         def is_completion_message(text: str) -> bool:
@@ -383,9 +398,12 @@ Begin now."""
                     if url:
                         return True, url
                     # Guide is ready but no URL found - still mark as ready
-                    if "TRAVEL_GUIDE_READY" in msg_text or "guide is ready" in msg_text.lower():
+                    if (
+                        "TRAVEL_GUIDE_READY" in msg_text
+                        or "guide is ready" in msg_text.lower()
+                    ):
                         return True, None
-            
+
             # Check direct message field
             message = event.get("message", [])
             msg_text = extract_text(message)
@@ -406,7 +424,9 @@ Begin now."""
             # Check action messages
             action = event.get("action", {})
             if isinstance(action, dict):
-                action_text = extract_text(action.get("message", "") or action.get("content", ""))
+                action_text = extract_text(
+                    action.get("message", "") or action.get("content", "")
+                )
                 if is_completion_message(action_text):
                     url = extract_url_from_text(action_text)
                     if url:
@@ -420,7 +440,11 @@ Begin now."""
 
         for event in events:
             kind = event.get("kind", "")
-            if kind in ("AgentErrorEvent", "ConversationErrorEvent", "ServerErrorEvent"):
+            if kind in (
+                "AgentErrorEvent",
+                "ConversationErrorEvent",
+                "ServerErrorEvent",
+            ):
                 obs = event.get("observation", {})
                 if isinstance(obs, dict):
                     return obs.get("content", str(obs))[:500]
@@ -485,7 +509,9 @@ Begin now."""
 
             private_conv_id = await self._wait_for_conversation_ready(start_task_id)
             if not private_conv_id:
-                raise RuntimeError(f"Start task {start_task_id} did not produce a conversation")
+                raise RuntimeError(
+                    f"Start task {start_task_id} did not produce a conversation"
+                )
 
             logger.info(f"Private conversation started: {private_conv_id}")
 
@@ -521,9 +547,11 @@ Begin now."""
                 error=error_msg,
             )
 
+
 # =============================================================================
 # Background Task Runner
 # =============================================================================
+
 
 async def process_guide_request(
     api_key: str,
