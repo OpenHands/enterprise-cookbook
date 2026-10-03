@@ -1,0 +1,5 @@
+---
+title: Command blacklist
+description: Block known-dangerous shell commands with a PreToolUse hook bundled in a plugin. Everything not on the blocklist runs normally.
+category: Guardrails
+icon: shield-halved
