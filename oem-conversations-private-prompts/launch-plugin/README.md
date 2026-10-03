@@ -55,7 +55,7 @@ payload = {
     },
     "plugins": [
         {
-            "source": "github:jpshackelford/oh-examples",
+            "source": "github:OpenHands/enterprise-cookbook",
             "repo_path": "oem-conversations-private-prompts/launch-plugin",
         }
     ],

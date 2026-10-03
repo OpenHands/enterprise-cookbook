@@ -125,7 +125,7 @@ class ConversationManager:
         destination: str,
         preferences: str,
         customer_name: str | None = None,
-        plugin_source: str = "github:jpshackelford/oh-examples",
+        plugin_source: str = "github:OpenHands/enterprise-cookbook",
         plugin_path: str = "oem-conversations-private-prompts/proprietary-plugin",
         plugin_ref: str = "feature/oem-conversations-private-prompts",
         request_id: str = "",

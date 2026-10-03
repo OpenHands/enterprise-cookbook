@@ -52,7 +52,7 @@ API_KEY = os.environ.get("OPENHANDS_API_KEY", os.environ.get("OH_API_KEY", ""))
 API_URL = os.environ.get("OPENHANDS_API_URL", "https://app.all-hands.dev/api")
 
 # Plugin sources (update to your fork if testing)
-LAUNCH_PLUGIN_SOURCE = "github:jpshackelford/oh-examples"
+LAUNCH_PLUGIN_SOURCE = "github:OpenHands/enterprise-cookbook"
 LAUNCH_PLUGIN_PATH = "oem-conversations-private-prompts/launch-plugin"
 LAUNCH_PLUGIN_REF = "feature/oem-conversations-private-prompts"  # Branch with the plugin code
 

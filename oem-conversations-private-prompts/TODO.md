@@ -93,6 +93,6 @@
 
 ## 🔗 Related Resources
 
-- PR #4: https://github.com/jpshackelford/oh-examples/pull/4
+- PR #1: https://github.com/OpenHands/enterprise-cookbook/pull/1
 - Branch: `feature/oem-conversations-private-prompts`
 - Original conversation: `f39bdade83f345cb96c3da11c948f838`
