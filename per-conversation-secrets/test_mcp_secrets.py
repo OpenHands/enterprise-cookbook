@@ -52,7 +52,7 @@ SECRET_NAME = "MCP_SECRET_TOKEN"
 SECRET_VALUE = "per-conv-secret-xyz-123"
 
 # Plugin source - from GitHub
-PLUGIN_SOURCE = "github:jpshackelford/oh-examples"
+PLUGIN_SOURCE = "github:OpenHands/enterprise-cookbook"
 PLUGIN_PATH = "per-conversation-secrets/test-plugin"
 
 

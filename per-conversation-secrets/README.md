@@ -104,7 +104,7 @@ You point a conversation at this plugin by adding a `plugins` entry alongside
 
 ```python
 "plugins": [{
-    "source": "github:jpshackelford/oh-examples",
+    "source": "github:OpenHands/enterprise-cookbook",
     "repo_path": "per-conversation-secrets/test-plugin"
 }]
 ```
@@ -158,7 +158,7 @@ requests.post(
             'MCP_SERVER_URL': 'https://...',
         },
         'plugins': [{                  # only needed for Pattern B
-            'source': 'github:jpshackelford/oh-examples',
+            'source': 'github:OpenHands/enterprise-cookbook',
             'repo_path': 'per-conversation-secrets/test-plugin',
         }],
     },
@@ -332,7 +332,7 @@ What happened end-to-end:
 
 1. The test started a sandbox and called `POST /v1/app-conversations` with
    `secrets={"MCP_SERVER_URL": ..., "MCP_SECRET_TOKEN": "per-conv-secret-xyz-123"}`
-   *and* `plugins=[{source: github:jpshackelford/oh-examples, repo_path: per-conversation-secrets/test-plugin}]`.
+   *and* `plugins=[{source: github:OpenHands/enterprise-cookbook, repo_path: per-conversation-secrets/test-plugin}]`.
 2. OpenHands fetched `test-plugin/` from GitHub, read `.mcp.json`, and
    substituted both `${MCP_SERVER_URL}` and `${MCP_SECRET_TOKEN}` from the
    secrets above.

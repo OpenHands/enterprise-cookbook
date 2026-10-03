@@ -37,7 +37,7 @@ import time
 import requests
 
 
-DEFAULT_SOURCE = "github:jpshackelford/oh-examples"
+DEFAULT_SOURCE = "github:OpenHands/enterprise-cookbook"
 DEFAULT_REF = "main"
 DEFAULT_REPO_PATH = "finish-callback/oh-finish-callback"
 DEFAULT_MESSAGE = "Say hello and then finish."

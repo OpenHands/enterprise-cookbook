@@ -27,7 +27,7 @@ requests.post(
     json={
         "plugins": [
             {
-                "source": "github:jpshackelford/oh-examples",
+                "source": "github:OpenHands/enterprise-cookbook",
                 "ref": "main",
                 "repo_path": "load-plugin/dad-joke",
             }
@@ -44,7 +44,7 @@ A plugin spec has three parts:
 
 | Field | Meaning | Example |
 |-------|---------|---------|
-| `source` | Where the plugin lives | `github:jpshackelford/oh-examples` |
+| `source` | Where the plugin lives | `github:OpenHands/enterprise-cookbook` |
 | `ref` | Git ref/branch/tag | `main` |
 | `repo_path` | Plugin sub-directory within the source | `load-plugin/dad-joke` |
 
@@ -99,7 +99,7 @@ python load_plugin.py             # dad-joke + "/dad-joke:about duck"
 |------|---------|---------|
 | `--api-key` | `OH_API_KEY` | – (required) |
 | `--base-url` | `OH_API_BASE` | `https://app.all-hands.dev` |
-| `--source` | `PLUGIN_SOURCE` | `github:jpshackelford/oh-examples` |
+| `--source` | `PLUGIN_SOURCE` | `github:OpenHands/enterprise-cookbook` |
 | `--ref` | `PLUGIN_REF` | `main` |
 | `--repo-path` | `PLUGIN_REPO_PATH` | `load-plugin/dad-joke` |
 | `--message` | `INITIAL_MESSAGE` | `/dad-joke:about duck` |
