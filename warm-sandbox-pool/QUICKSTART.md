@@ -215,11 +215,11 @@ warm-sandbox-pool/
 
 You've successfully run the demo when:
 
-✅ Pool shows 3 sandboxes in READY state  
-✅ You can start a conversation and get instant allocation  
-✅ The conversation link opens in OpenHands  
-✅ The agent can interact with the pre-installed quote service  
-✅ Pool automatically provisions a replacement sandbox  
+✅ Pool shows 3 sandboxes in READY state\
+✅ You can start a conversation and get instant allocation\
+✅ The conversation link opens in OpenHands\
+✅ The agent can interact with the pre-installed quote service\
+✅ Pool automatically provisions a replacement sandbox
 
 **Total time from zero to working demo: ~5 minutes**
 

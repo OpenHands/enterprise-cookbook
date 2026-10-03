@@ -49,7 +49,7 @@ get '/quotes/:author' do
   content_type :json
   author_param = params['author'].downcase
   matches = QUOTES.select { |q| q[:author].downcase.include?(author_param) }
-  
+
   if matches.empty?
     status 404
     { error: 'No quotes found for that author' }.to_json

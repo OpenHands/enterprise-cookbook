@@ -15,7 +15,7 @@ class PoolUI {
     setupEventStream() {
         // Connect to Server-Sent Events for real-time pool updates
         this.eventSource = new EventSource('/api/pool/events');
-        
+
         this.eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             this.updateUI(data);
@@ -55,7 +55,7 @@ class PoolUI {
 
     renderSandboxes(sandboxes) {
         const container = document.getElementById('sandbox-list');
-        
+
         if (sandboxes.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: #6b7280;">No sandboxes yet...</p>';
             return;
@@ -67,9 +67,9 @@ class PoolUI {
     renderSandboxCard(sandbox) {
         const statusClass = `status-${sandbox.state.toLowerCase()}`;
         const statusEmoji = this.getStatusEmoji(sandbox.state);
-        
+
         const duration = this.calculateDuration(sandbox.created_at, sandbox.ready_at);
-        const logs = sandbox.init_log && sandbox.init_log.length > 0 
+        const logs = sandbox.init_log && sandbox.init_log.length > 0
             ? this.renderLogs(sandbox.init_log)
             : '';
 
@@ -112,7 +112,7 @@ class PoolUI {
         const recentLogs = logs.slice(-5); // Last 5 lines
         return `
             <div class="sandbox-log">
-                ${recentLogs.map(line => 
+                ${recentLogs.map(line =>
                     `<div class="sandbox-log-line">${this.escapeHtml(line)}</div>`
                 ).join('')}
             </div>
@@ -121,11 +121,11 @@ class PoolUI {
 
     calculateDuration(createdAt, readyAt) {
         if (!readyAt) return null;
-        
+
         const created = new Date(createdAt);
         const ready = new Date(readyAt);
         const seconds = Math.floor((ready - created) / 1000);
-        
+
         return `Ready in ${seconds}s`;
     }
 
@@ -159,7 +159,7 @@ class PoolUI {
 
         button.addEventListener('click', async () => {
             const message = form.value.trim();
-            
+
             if (!message) {
                 alert('Please enter a message');
                 return;
@@ -191,7 +191,7 @@ class PoolUI {
 
                 // Show success result
                 this.showResult(data, false);
-                
+
                 // Clear input
                 form.value = '';
 
@@ -207,7 +207,7 @@ class PoolUI {
 
     showResult(data, isError) {
         const resultArea = document.getElementById('result-area');
-        
+
         if (isError) {
             resultArea.className = 'result-area error';
             resultArea.innerHTML = `

@@ -6,7 +6,7 @@ Demonstrates maintaining a pool of pre-initialized "warm" sandboxes that late-bi
 
 ## Context: Alternative to Custom Images
 
-When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies. 
+When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies.
 
 Even when using custom images in OpenHands Enterprise, some scenarios require additional tasks to be completed on the running sandbox to make it ready for use. **If these tasks take more than a few seconds, the Warm Sandbox Pool technique eliminates the apparent delay an end-user would see** by preparing a pool of pre-initialized sandboxes that late-bind to conversations when an end-user begins to interact with the agent.
 

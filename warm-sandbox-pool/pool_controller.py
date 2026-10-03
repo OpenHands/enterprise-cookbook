@@ -25,11 +25,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 import requests
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
+
 
 # Configure logging
 logging.basicConfig(
@@ -72,7 +72,9 @@ class PooledSandbox:
             "agent_url": self.agent_url,
             "created_at": self.created_at.isoformat(),
             "ready_at": self.ready_at.isoformat() if self.ready_at else None,
-            "allocated_at": self.allocated_at.isoformat() if self.allocated_at else None,
+            "allocated_at": self.allocated_at.isoformat()
+            if self.allocated_at
+            else None,
             "conversation_id": self.conversation_id,
             "error_message": self.error_message,
             "init_log": self.init_log[-10:],  # Last 10 log lines
@@ -163,9 +165,16 @@ class PoolController:
         try:
             # 1. Create sandbox via Cloud API
             logger.info("Creating new sandbox...")
-            params = {"sandbox_spec_id": self.sandbox_spec_id} if self.sandbox_spec_id else None
+            params = (
+                {"sandbox_spec_id": self.sandbox_spec_id}
+                if self.sandbox_spec_id
+                else None
+            )
             resp = requests.post(
-                f"{self.base_url}/api/v1/sandboxes", headers=self.headers, params=params, timeout=30
+                f"{self.base_url}/api/v1/sandboxes",
+                headers=self.headers,
+                params=params,
+                timeout=30,
             )
             resp.raise_for_status()
             sb_data = resp.json()
@@ -272,7 +281,10 @@ class PoolController:
             f"{sandbox.agent_url}/api/bash/execute_bash_command",
             headers=session_headers,
             json={
-                "command": f"chmod +x /tmp/init.sh && SANDBOX_ID={sandbox.id} bash /tmp/init.sh",
+                "command": (
+                    "chmod +x /tmp/init.sh && "
+                    f"SANDBOX_ID={sandbox.id} bash /tmp/init.sh"
+                ),
                 "timeout": 300,
             },
             timeout=320,
@@ -322,9 +334,7 @@ class PoolController:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def attach_conversation(
-        self, sandbox: PooledSandbox, message: str
-    ) -> str:
+    def attach_conversation(self, sandbox: PooledSandbox, message: str) -> str:
         """Attach a new conversation to the given sandbox."""
         payload = {
             "sandbox_id": sandbox.id,
@@ -492,7 +502,9 @@ def main():
     args = parse_args()
 
     if not args.api_key:
-        sys.exit("Error: OH_API_KEY is required. Set via --api-key or environment variable.")
+        sys.exit(
+            "Error: OH_API_KEY is required. Set via --api-key or environment variable."
+        )
 
     # Initialize pool controller
     global pool_controller
