@@ -13,7 +13,7 @@ Because every coding session needs more groaning. 🙄
 Click "Dad Jokes" in the sidebar (below Automate) to open the Dad Jokes page:
 - View a random programming/tech dad joke
 - Click "Reveal Punchline" for the payoff
-- Rate jokes with 😩 Groan or 😂 LOL buttons  
+- Rate jokes with 😩 Groan or 😂 LOL buttons
 - Track your total groans on the Groan-O-Meter™
 - See which conversation you're currently annoying
 

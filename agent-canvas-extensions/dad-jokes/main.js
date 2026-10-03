@@ -53,7 +53,7 @@ export function activate(ctx) {
     const joke = getRandomJoke();
     const convo = await ctx.agentCanvas.conversation.getActive();
     const prefix = convo ? `Hey ${convo.title || "friend"}! ` : "";
-    
+
     await ctx.agentCanvas.window.showInformationMessage(
       `${prefix}${joke.setup} ... ${joke.punchline} 🥁`
     );

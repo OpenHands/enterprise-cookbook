@@ -10,10 +10,10 @@
     <style>
       /*
        * AgentCanvas Theme Integration
-       * 
+       *
        * Theme variables (--oh-*, --cool-grey-*) are injected by the host via postMessage.
        * Extensions should use these variables for styling to match the AgentCanvas theme.
-       * 
+       *
        * Fallback values are provided for local development/preview outside AgentCanvas.
        */
       :root {
@@ -435,7 +435,7 @@
 
           if (dadName) document.getElementById("dadName").value = dadName;
           if (victimName) document.getElementById("victimName").value = victimName;
-          
+
           if (categories) {
             document.getElementById("catProgramming").checked = categories.programming !== false;
             document.getElementById("catAI").checked = categories.ai !== false;
@@ -477,7 +477,7 @@
           if (!confirm("Are you sure? This will reset your groan count and dad level!")) {
             return;
           }
-          
+
           api.storage.set("groanCount", 0).then(function () {
             document.getElementById("totalGroans").textContent = "0";
             document.getElementById("dadLevel").textContent = calculateDadLevel(0);
