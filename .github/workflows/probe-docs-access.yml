@@ -20,6 +20,20 @@ jobs:
                   owner: OpenHands
                   repositories: docs
 
+            - id: app_scoped
+              uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+              continue-on-error: true
+              with:
+                  app-id: ${{ secrets.RELEASE_APP_ID }}
+                  private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+                  owner: OpenHands
+                  repositories: docs
+                  permission-contents: write
+                  permission-pull-requests: write
+
+            - name: Report scoped
+              run: "echo \"App token with contents:write + pull-requests:write: ${{ steps.app_scoped.outcome == 'success' }}\""
+
             - name: Report (booleans only)
               env:
                   APP_TOKEN: ${{ steps.app.outputs.token }}
