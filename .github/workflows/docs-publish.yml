@@ -1,0 +1,102 @@
+---
+# Publishes merged examples to the docs Cookbook tab through one `cookbook-sync` PR
+# in OpenHands/docs. The nightly run re-renders from scratch, so missed events and
+# drift repair themselves. During the pilot the sync PR is merged by a human.
+name: Docs publish
+
+on:
+    push:
+        branches: [main]
+    schedule:
+        - cron: 30 3 * * *
+    workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+    group: docs-publish
+    cancel-in-progress: true
+
+env:
+    SYNC_BRANCH: cookbook-sync
+
+jobs:
+    render:
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  path: src
+                  persist-credentials: false
+
+            - uses: ./src/.github/actions/render-docs
+              with:
+                  source-path: src
+                  link-ref: main
+
+    publish:
+        needs: render
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  path: src
+                  sparse-checkout: .github/scripts
+                  persist-credentials: false
+
+            - uses: actions/download-artifact@v5
+              with:
+                  name: docs-render
+                  path: artifact
+
+            - name: Read docs base commit
+              id: base
+              run: echo "sha=$(cat artifact/base-sha)" >> "$GITHUB_OUTPUT"
+
+            - id: app
+              uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+              with:
+                  app-id: ${{ secrets.RELEASE_APP_ID }}
+                  private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+                  owner: OpenHands
+                  repositories: docs
+                  permission-contents: write
+                  permission-pull-requests: write
+
+            - uses: actions/checkout@v5
+              with:
+                  repository: OpenHands/docs
+                  ref: ${{ steps.base.outputs.sha }}
+                  path: docs
+                  token: ${{ steps.app.outputs.token }}
+
+            - name: Configure commit identity
+              env:
+                  GH_TOKEN: ${{ steps.app.outputs.token }}
+                  SLUG: ${{ steps.app.outputs.app-slug }}
+              run: |
+                  id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+                  git -C docs config user.name "${SLUG}[bot]"
+                  git -C docs config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
+
+            - name: Write docs PR body
+              run: |
+                  cat > body.md <<EOF
+                  Syncs the Cookbook tab with ${GITHUB_REPOSITORY}@${GITHUB_SHA}.
+
+                  Every file under \`cookbook/\` and the Cookbook tab in \`docs.json\` are generated from that repository. Change them there, not here; edits made directly in this repository are overwritten by the next sync.
+
+                  _Opened automatically by the docs-publish workflow in ${GITHUB_REPOSITORY} ([run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}))._
+                  EOF
+
+            - name: Push sync branch
+              env:
+                  DOCS_TOKEN: ${{ steps.app.outputs.token }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py push --artifact artifact --docs docs \
+                    --branch "$SYNC_BRANCH" --body-file body.md \
+                    --title "docs(cookbook): sync from ${GITHUB_REPOSITORY}"

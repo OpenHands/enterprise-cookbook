@@ -1,0 +1,57 @@
+---
+name: Render Cookbook docs
+description: >-
+    Render the published examples onto the current OpenHands/docs main and upload the
+    resulting cookbook/ directory and docs.json as an artifact. Runs without secrets.
+
+inputs:
+    source-path:
+        description: Path to the enterprise-cookbook checkout
+        required: true
+    link-ref:
+        description: Git ref used in links back to this repository
+        required: true
+
+outputs:
+    base-sha:
+        description: The OpenHands/docs commit the pages were rendered onto
+        value: ${{ steps.render.outputs.base-sha }}
+
+runs:
+    using: composite
+    steps:
+        - name: Check out OpenHands/docs main
+          uses: actions/checkout@v5
+          with:
+              repository: OpenHands/docs
+              path: _docs
+              persist-credentials: false
+
+        - uses: actions/setup-node@v5
+          with:
+              node-version: '22'
+              cache: npm
+              cache-dependency-path: ${{ inputs.source-path }}/tools/docs-render/package-lock.json
+
+        - name: Render
+          id: render
+          shell: bash
+          env:
+              SOURCE: ${{ inputs.source-path }}
+              LINK_REF: ${{ inputs.link-ref }}
+          run: |
+              npm ci --prefix "$SOURCE/tools/docs-render" --no-audit --no-fund
+              node "$SOURCE/tools/docs-render/cli.mjs" render \
+                --examples "$SOURCE" --docs _docs --ref "$LINK_REF" --summary _summary.json
+              mkdir -p _artifact
+              cp -r _docs/cookbook _artifact/cookbook
+              cp _docs/docs.json _summary.json _artifact/
+              base_sha=$(git -C _docs rev-parse HEAD)
+              echo "$base_sha" > _artifact/base-sha
+              echo "base-sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+        - uses: actions/upload-artifact@v5
+          with:
+              name: docs-render
+              path: _artifact
+              retention-days: 7

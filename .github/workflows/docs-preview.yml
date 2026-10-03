@@ -1,0 +1,192 @@
+---
+# Gives every pull request a Mintlify preview of the docs pages it produces.
+# The render job runs without secrets. The preview job holds the docs write token
+# and only copies the rendered files; it never installs or runs code from the PR.
+# Preview PRs in OpenHands/docs are never merged; docs-publish.yml ships merged changes.
+name: Docs preview
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened, closed]
+
+permissions: {}
+
+concurrency:
+    group: docs-preview-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+env:
+    PREVIEW_BRANCH: cookbook-preview/pr-${{ github.event.pull_request.number }}
+    HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+    render:
+        if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            statuses: write
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  path: src
+                  persist-credentials: false
+
+            - name: Mark preview pending
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py status --repo "$GITHUB_REPOSITORY" --sha "$HEAD_SHA" \
+                    --state pending --description "Rendering docs preview"
+
+            - uses: ./src/.github/actions/render-docs
+              with:
+                  source-path: src
+                  link-ref: ${{ env.HEAD_SHA }}
+
+            - name: Mark render failure
+              if: failure()
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py status --repo "$GITHUB_REPOSITORY" --sha "$HEAD_SHA" \
+                    --state failure --description "Docs render failed; see the Docs preview workflow" \
+                    --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+    preview:
+        needs: render
+        runs-on: ubuntu-24.04
+        timeout-minutes: 30
+        permissions:
+            contents: read
+            statuses: write
+            pull-requests: write
+        steps:
+            - name: Check out helper script only
+              uses: actions/checkout@v5
+              with:
+                  path: src
+                  sparse-checkout: .github/scripts
+                  persist-credentials: false
+
+            - uses: actions/download-artifact@v5
+              with:
+                  name: docs-render
+                  path: artifact
+
+            - name: Read docs base commit
+              id: base
+              run: echo "sha=$(cat artifact/base-sha)" >> "$GITHUB_OUTPUT"
+
+            - id: app
+              uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+              with:
+                  app-id: ${{ secrets.RELEASE_APP_ID }}
+                  private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+                  owner: OpenHands
+                  repositories: docs
+                  permission-contents: write
+                  permission-pull-requests: write
+
+            - uses: actions/checkout@v5
+              with:
+                  repository: OpenHands/docs
+                  ref: ${{ steps.base.outputs.sha }}
+                  path: docs
+                  token: ${{ steps.app.outputs.token }}
+
+            - name: Configure commit identity
+              env:
+                  GH_TOKEN: ${{ steps.app.outputs.token }}
+                  SLUG: ${{ steps.app.outputs.app-slug }}
+              run: |
+                  id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+                  git -C docs config user.name "${SLUG}[bot]"
+                  git -C docs config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
+
+            - name: Write docs PR body
+              env:
+                  PR_URL: ${{ github.event.pull_request.html_url }}
+                  PR_TITLE: ${{ github.event.pull_request.title }}
+              run: |
+                  cat > body.md <<EOF
+                  Preview of the Cookbook pages produced by ${PR_URL} (${PR_TITLE}), rendered from ${GITHUB_REPOSITORY}@${HEAD_SHA}.
+
+                  **Do not merge.** This draft exists only to get a Mintlify preview. It is updated on every push to the source PR and closed when that PR closes. Merged changes reach the docs through a separate \`cookbook-sync\` PR.
+
+                  _Opened automatically by the docs-preview workflow in ${GITHUB_REPOSITORY}._
+                  EOF
+
+            - name: Push preview branch
+              id: push
+              env:
+                  DOCS_TOKEN: ${{ steps.app.outputs.token }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py push --artifact artifact --docs docs \
+                    --branch "$PREVIEW_BRANCH" --body-file body.md --draft \
+                    --title "Cookbook preview: ${GITHUB_REPOSITORY}#${{ github.event.pull_request.number }} (do not merge)"
+
+            - name: Wait for Mintlify preview and docs checks
+              id: wait
+              if: steps.push.outputs.changed == 'true'
+              env:
+                  DOCS_TOKEN: ${{ github.token }}
+              run: python3 src/.github/scripts/docs_sync.py wait --sha "${{ steps.push.outputs.head_sha }}" --timeout 1200
+
+            - name: Report on this PR
+              if: always() && steps.push.outcome == 'success'
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+                  PAGES: ${{ steps.push.outputs.pages }}
+                  CHECKS: ${{ steps.wait.outputs.checks }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py report --repo "$GITHUB_REPOSITORY" \
+                    --pr "${{ github.event.pull_request.number }}" --sha "$HEAD_SHA" \
+                    --changed "${{ steps.push.outputs.changed }}" \
+                    --docs-pr-url "${{ steps.push.outputs.pr_url }}" \
+                    --preview-url "${{ steps.wait.outputs.preview_url }}" \
+                    --pages "$PAGES" --checks "$CHECKS"
+
+            - name: Mark preview failure
+              if: failure()
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py status --repo "$GITHUB_REPOSITORY" --sha "$HEAD_SHA" \
+                    --state failure --description "Docs preview failed; see the Docs preview workflow" \
+                    --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+    cleanup:
+        if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  path: src
+                  sparse-checkout: .github/scripts
+                  persist-credentials: false
+
+            - id: app
+              uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+              with:
+                  app-id: ${{ secrets.RELEASE_APP_ID }}
+                  private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+                  owner: OpenHands
+                  repositories: docs
+                  permission-contents: write
+                  permission-pull-requests: write
+
+            - name: Close the preview PR
+              env:
+                  DOCS_TOKEN: ${{ steps.app.outputs.token }}
+                  MERGED: ${{ github.event.pull_request.merged }}
+                  PR_URL: ${{ github.event.pull_request.html_url }}
+              run: |
+                  if [ "$MERGED" = "true" ]; then
+                    msg="${PR_URL} was merged; its changes reach the docs through the cookbook-sync PR."
+                  else
+                    msg="${PR_URL} was closed without merging."
+                  fi
+                  python3 src/.github/scripts/docs_sync.py close --branch "$PREVIEW_BRANCH" --comment "$msg"

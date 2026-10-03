@@ -1,0 +1,27 @@
+---
+# Settings for the Cookbook tab on docs.openhands.dev.
+# An example is published there once its directory has an example.yaml.
+# See tools/docs-render/README.md.
+tab: Cookbook
+after_tab: Enterprise
+overview_group: Overview
+title: Cookbook
+description: Runnable examples for building on the OpenHands API.
+intro: |
+    Standalone, runnable examples for the OpenHands API. Each page is generated from an
+    example in [OpenHands/enterprise-cookbook](https://github.com/OpenHands/enterprise-cookbook),
+    where you will find the full source.
+
+categories:
+    - name: Sandbox lifecycle
+      description: Create, attach to, and tear down sandboxes.
+    - name: Conversation monitoring & reacting
+      description: Observe conversations and react to their state.
+    - name: Secrets & authentication
+      description: Inject credentials and manage identity.
+    - name: Plugins, skills & MCP
+      description: Extend conversations with plugins, skills, and MCP servers.
+    - name: Custom agents & tools
+      description: Configure the agent and add custom tools.
+    - name: Guardrails
+      description: Constrain what the agent can do with hooks.
