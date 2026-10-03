@@ -16,6 +16,7 @@ Jump to a section:
 - [Custom agents & tools](#custom-agents--tools)
 - [Guardrails](#guardrails)
 - [Hooks](#hooks)
+- [Migrating from other platforms](#migrating-from-other-platforms)
 
 ### Sandbox lifecycle
 
@@ -96,6 +97,14 @@ under its primary topic above.
 | [workspace-isolation](./workspace-isolation/) | PreToolUse | **Advanced:** Enforce directory boundaries — prevent agents from navigating/writing outside assigned workspace |
 | [gpg-commit-signing](./gpg-commit-signing/) | SessionStart | Import a GPG key from a custom secret to sign commits on **every** conversation |
 | [finish-callback](./finish-callback/) | Stop | Notify an external URL the moment a conversation finishes (push instead of poll) |
+
+### Migrating from other platforms
+
+Concept-first guides for moving an existing workload onto OpenHands.
+
+| Example | Description |
+|---------|-------------|
+| [daytona-migration](./daytona-migration/) | Migrate from [Daytona](https://www.daytona.io/docs/) to OpenHands: concept model + endpoint mapping (Daytona Platform/Toolbox APIs → OpenHands Cloud App Server / Agent Server), plus two runnable scenarios — **(1)** drive the OpenHands agent that ships in every sandbox via high-level app-server or low-level agent-server APIs, and **(2)** run **Claude Code / Codex** conversations inside OpenHands sandboxes over ACP |
 
 ## API Versions
 
