@@ -144,7 +144,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--base-url", default=DEFAULT_BASE_URL, help="Frontend base URL.")
     p.add_argument(
         "--source",
-        default="github:jpshackelford/oh-examples",
+        default="github:OpenHands/enterprise-cookbook",
         help="Plugin source, e.g. 'github:owner/repo'.",
     )
     p.add_argument("--ref", default="main", help="Git ref/branch/tag.")
@@ -175,7 +175,7 @@ def main() -> int:
     # No specific plugin requested -> show the two canonical variants, both
     # using this example's self-contained plugin (./dad-joke).
     if not args.repo_path:
-        plugin_source = "github:jpshackelford/oh-examples"
+        plugin_source = "github:OpenHands/enterprise-cookbook"
         plugin_path = "launch-plugin-badge/dad-joke"
         print("Two ways to use the /launch endpoint with a plugin:\n")
 

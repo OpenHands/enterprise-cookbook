@@ -50,7 +50,7 @@ import requests
 # The plugin is fetched from this repo on GitHub (this very directory's
 # dad-joke/). Until your changes are merged to the default branch, point --ref
 # at your branch so the fetch can find the plugin.
-DEFAULT_SOURCE = "github:jpshackelford/oh-examples"
+DEFAULT_SOURCE = "github:OpenHands/enterprise-cookbook"
 DEFAULT_REF = "main"
 DEFAULT_REPO_PATH = "load-plugin/dad-joke"
 DEFAULT_MESSAGE = "/dad-joke:about duck"

@@ -1,1 +1,1 @@
-# Tests for oh-examples
+# Tests for enterprise-cookbook

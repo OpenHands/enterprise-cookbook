@@ -1,4 +1,4 @@
-# oh-examples
+# enterprise-cookbook
 
 A collection of example code for working with the OpenHands API.
 

@@ -48,7 +48,7 @@ MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "")
 SECRET_TOKEN = "per-conv-secret-xyz-123"
 
 # Plugin source - from GitHub (uses ${MCP_SERVER_URL} and ${MCP_SECRET_TOKEN})
-PLUGIN_SOURCE = "github:jpshackelford/oh-examples"
+PLUGIN_SOURCE = "github:OpenHands/enterprise-cookbook"
 PLUGIN_PATH = "per-conversation-secrets/test-plugin"
 
 # Timeout constants

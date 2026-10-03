@@ -22,7 +22,7 @@ this very repo (which ships a tiny ``.openhands/setup.sh``) so you can watch the
 whole thing work before pointing it at your own repository.
 
     export OH_API_KEY=...                     # Cloud API key (required)
-    python attach_conversation.py             # clones jpshackelford/oh-examples
+    python attach_conversation.py             # clones OpenHands/enterprise-cookbook
 
     python attach_conversation.py \
         --repo https://github.com/your-org/your-repo \
@@ -38,7 +38,7 @@ import time
 import requests
 
 
-DEFAULT_REPO = "https://github.com/jpshackelford/oh-examples"
+DEFAULT_REPO = "https://github.com/OpenHands/enterprise-cookbook"
 DEFAULT_MESSAGE = (
     "The repository has already been cloned into the workspace and its "
     ".openhands/setup.sh has been run. List the files you see and give me a "

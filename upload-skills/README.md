@@ -91,7 +91,7 @@ python upload_skills.py ./example-skills
 Sample output:
 
 ```
-local skills dir: /path/to/oh-examples/upload-skills/example-skills
+local skills dir: /path/to/enterprise-cookbook/upload-skills/example-skills
   AgentSkills (SKILL.md): 1
     - hello-openhands
   loose .md skills:       0

@@ -56,7 +56,7 @@ build your own:
 
 ```bash
 python build_launch_url.py \
-    --source github:jpshackelford/oh-examples \
+    --source github:OpenHands/enterprise-cookbook \
     --repo-path launch-plugin-badge/dad-joke \
     --message "/dad-joke:about" \
     --param animal="duck" \
@@ -75,7 +75,7 @@ import base64, json
 
 plugins = [
     {
-        "source": "github:jpshackelford/oh-examples",
+        "source": "github:OpenHands/enterprise-cookbook",
         "ref": "main",
         "repo_path": "launch-plugin-badge/dad-joke",
         "parameters": {"animal": "duck"},
@@ -129,7 +129,7 @@ For local or staging experiments you can skip base64 entirely and pass
 unencoded query params — `plugin_source`, `plugin_ref`, `plugin_repo_path`:
 
 ```
-https://app.all-hands.dev/launch?plugin_source=github:jpshackelford/oh-examples&plugin_ref=main&plugin_repo_path=launch-plugin-badge/dad-joke
+https://app.all-hands.dev/launch?plugin_source=github:OpenHands/enterprise-cookbook&plugin_ref=main&plugin_repo_path=launch-plugin-badge/dad-joke
 ```
 
 The encoded `plugins` form is what you want for shareable badges — and it's the
@@ -149,7 +149,7 @@ its command is `/dad-joke:about`, and the `animal` parameter pre-fills the modal
 ```python
 build_launch_url(
     plugins=[{
-        "source": "github:jpshackelford/oh-examples",
+        "source": "github:OpenHands/enterprise-cookbook",
         "ref": "main",
         "repo_path": "launch-plugin-badge/dad-joke",
         "parameters": {"animal": "duck"},   # pre-fills the modal
@@ -180,7 +180,7 @@ animal and then delivers.
 ```python
 build_launch_url(
     plugins=[{
-        "source": "github:jpshackelford/oh-examples",
+        "source": "github:OpenHands/enterprise-cookbook",
         "ref": "main",
         "repo_path": "launch-plugin-badge/dad-joke",
     }],

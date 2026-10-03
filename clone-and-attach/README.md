@@ -74,14 +74,14 @@ sandbox: 1ho9eZpt4m27CC23XPdGcN
   sandbox status: RUNNING
 agent: https://ahhygodzefollslv.prod-runtime.all-hands.dev
 
-=== shallow clone https://github.com/jpshackelford/oh-examples -> /workspace/oh-examples ===
+=== shallow clone https://github.com/OpenHands/enterprise-cookbook -> /workspace/enterprise-cookbook ===
 $ git clone  (exit=0)
 
 === run .openhands/setup.sh ===
 $ setup script  (exit=0)
-[oh-examples setup.sh] running in /workspace/oh-examples
-[oh-examples setup.sh] python: Python 3.13.13
-[oh-examples setup.sh] done
+[enterprise-cookbook setup.sh] running in /workspace/enterprise-cookbook
+[enterprise-cookbook setup.sh] python: Python 3.13.13
+[enterprise-cookbook setup.sh] done
 
 === attach conversation ===
   start-task status: STARTING_CONVERSATION

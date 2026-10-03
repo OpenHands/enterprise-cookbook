@@ -1,5 +1,5 @@
 [project]
-name = "oh-examples"
+name = "enterprise-cookbook"
 version = "0.1.0"
 description = "Example code for working with the OpenHands API"
 readme = "README.md"
