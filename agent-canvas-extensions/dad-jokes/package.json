@@ -1,12 +1,12 @@
 {
-  "name": "@oh-examples/dad-jokes-extension",
+  "name": "@enterprise-cookbook/dad-jokes-extension",
   "version": "1.0.0",
   "description": "Dad Jokes UI extension for Agent Canvas - because every coding session needs more groaning 🙄",
   "keywords": ["agent-canvas", "extension", "dad-jokes", "humor", "openhands"],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jpshackelford/oh-examples.git",
+    "url": "https://github.com/OpenHands/enterprise-cookbook.git",
     "directory": "agent-canvas-extensions/dad-jokes"
   },
   "files": [

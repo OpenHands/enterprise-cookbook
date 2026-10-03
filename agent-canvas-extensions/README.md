@@ -124,12 +124,12 @@ Click the **Add** button to open the install dialog.
 In the "From a source ref" field, enter:
 
 ```
-gh:jpshackelford/oh-examples/agent-canvas-extensions/dad-jokes@main
+gh:OpenHands/enterprise-cookbook/agent-canvas-extensions/dad-jokes@main
 ```
 
 **Understanding the format:**
 - `gh:` — Prefix indicating a GitHub-hosted extension
-- `jpshackelford/oh-examples` — GitHub owner/repo
+- `OpenHands/enterprise-cookbook` — GitHub owner/repo
 - `/agent-canvas-extensions/dad-jokes` — Path to the extension directory within the repo
 - `@main` — Branch or tag (use `@v1.0.0` for a specific release)
 
@@ -217,7 +217,7 @@ https://localhost:3000
 For extensions published to npm:
 
 ```
-npm:@oh-examples/dad-jokes-extension@^1
+npm:@enterprise-cookbook/dad-jokes-extension@^1
 ```
 
 ### From a Specific Git Tag
@@ -225,7 +225,7 @@ npm:@oh-examples/dad-jokes-extension@^1
 For reproducible installs pinned to a release:
 
 ```
-gh:jpshackelford/oh-examples/agent-canvas-extensions/dad-jokes@v1.0.0
+gh:OpenHands/enterprise-cookbook/agent-canvas-extensions/dad-jokes@v1.0.0
 ```
 
 ---

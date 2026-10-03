@@ -53,7 +53,7 @@ Navigate to Settings → Dad Jokes to:
 ### Install from GitHub
 In the Agent Canvas Extensions page (`/extensions`), click **Add** and enter:
 ```
-gh:jpshackelford/oh-examples/agent-canvas-extensions/dad-jokes@main
+gh:OpenHands/enterprise-cookbook/agent-canvas-extensions/dad-jokes@main
 ```
 
 ### Install from local development
