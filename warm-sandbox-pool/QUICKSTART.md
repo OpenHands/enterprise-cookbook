@@ -12,8 +12,8 @@ Get the Warm Sandbox Pool demo running in 5 minutes.
 
 ```bash
 # Clone the repository
-git clone https://github.com/jpshackelford/oh-examples.git
-cd oh-examples/warm-sandbox-pool
+git clone https://github.com/OpenHands/enterprise-cookbook.git
+cd enterprise-cookbook/warm-sandbox-pool
 
 # Install Python dependencies (use uv or pip)
 pip install -r requirements.txt
