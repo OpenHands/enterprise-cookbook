@@ -56,6 +56,14 @@ def open_pr_for(branch: str) -> dict | None:
     return prs[0] if prs else None
 
 
+def remote_branch(docs: Path, branch: str) -> str | None:
+    """Fetch the branch and return its commit, or None if it doesn't exist."""
+    if not run("git", "ls-remote", "--heads", "origin", branch, cwd=docs):
+        return None
+    run("git", "fetch", "-q", "--depth=1", "origin", branch, cwd=docs)
+    return run("git", "rev-parse", "FETCH_HEAD", cwd=docs)
+
+
 def changed_pages(docs: Path) -> list[dict]:
     lines = run(
         "git", "diff", "--name-status", "HEAD~1", "HEAD", "--", "cookbook", cwd=docs
@@ -98,26 +106,17 @@ def cmd_push(a: argparse.Namespace) -> None:
         set_output(changed="false")
         return
 
-    run(
-        "git",
-        "commit",
-        "-q",
-        "-m",
-        a.title,
-        "-m",
-        Path(a.body_file).read_text(),
-        cwd=docs,
-    )
-    run(
-        "git",
-        "push",
-        "-q",
-        "--force",
-        "origin",
-        f"HEAD:refs/heads/{a.branch}",
-        cwd=docs,
-    )
+    body = Path(a.body_file).read_text()
+    run("git", "commit", "-q", "-m", a.title, "-m", body, cwd=docs)
     head_sha = run("git", "rev-parse", "HEAD", cwd=docs)
+    remote = remote_branch(docs, a.branch)
+    tree = run("git", "rev-parse", "HEAD^{tree}", cwd=docs)
+    if remote and run("git", "rev-parse", f"{remote}^{{tree}}", cwd=docs) == tree:
+        print(f"{a.branch} already has these files; not pushing")
+        head_sha = remote
+    else:
+        push = f"HEAD:refs/heads/{a.branch}"
+        run("git", "push", "-q", "--force", "origin", push, cwd=docs)
 
     if existing:
         number = existing["number"]
