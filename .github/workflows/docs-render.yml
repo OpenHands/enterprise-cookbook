@@ -1,0 +1,31 @@
+---
+# Tests the converter and checks that every published example renders. Needs no
+# secrets, so it also runs on pull requests from forks.
+name: Docs render
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+permissions:
+    contents: read
+
+jobs:
+    check:
+        runs-on: ubuntu-24.04
+        defaults:
+            run:
+                working-directory: tools/docs-render
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: '22'
+                  cache: npm
+                  cache-dependency-path: tools/docs-render/package-lock.json
+
+            - run: npm ci --no-audit --no-fund
+            - run: npm test
+            - run: npm run check

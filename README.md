@@ -97,6 +97,14 @@ under its primary topic above.
 | [gpg-commit-signing](./gpg-commit-signing/) | SessionStart | Import a GPG key from a custom secret to sign commits on **every** conversation |
 | [finish-callback](./finish-callback/) | Stop | Notify an external URL the moment a conversation finishes (push instead of poll) |
 
+## Published on docs.openhands.dev
+
+Examples with an `example.yaml` are also published as pages in the
+[Cookbook](https://docs.openhands.dev/cookbook) tab of the OpenHands docs. Pull
+requests get a preview link for those pages before merge. See
+[tools/docs-render](./tools/docs-render/) for how to publish an example and
+write a README that renders well in both places.
+
 ## API Versions
 
 OpenHands has two API versions:
