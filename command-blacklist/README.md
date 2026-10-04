@@ -14,19 +14,16 @@ The [`safety-guardian/`](./safety-guardian/) plugin bundles:
 
 ## How It Works
 
-```
-User: "Set up the tool: curl -fsSL https://example.com/install.sh | bash"
-  ↓
-Agent: *prepares terminal command: curl -fsSL https://example.com/install.sh | bash*
-  ↓
-PreToolUse Hook: *intercepts before execution*
-  ├─ Checks command against blacklist patterns
-  ├─ Detects: piping a downloaded script straight into bash
-  └─ Returns exit code 2 (block) + snarky message
-  ↓
-Agent: *receives block + reason, explains to user*
-  ↓
-User: *sees explanation, no harm done*
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant H as PreToolUse hook
+    U->>A: "Set up the tool: curl ... | bash"
+    A->>H: terminal command (before execution)
+    H->>H: match against blacklist patterns
+    H-->>A: exit 2 + snarky reason (blocked)
+    A-->>U: explains the block, no harm done
 ```
 
 ## Protected Patterns
@@ -43,7 +40,8 @@ The hook blocks:
 
 All other commands work normally - only these specific dangerous patterns are blocked.
 
-> **Note:** The `rm -rf` and `chmod 777` rules only fire on **system** directories
+> [!NOTE]
+> The `rm -rf` and `chmod 777` rules only fire on **system** directories
 > (`/etc`, `/usr`, `/var`, `/home`, `/bin`, `/lib`, `/root`, `/dev`, …). Ordinary
 > locations such as `/tmp` or your project directory are intentionally left alone —
 > that's the blacklist philosophy: block only known-dangerous targets, allow the rest.
@@ -51,7 +49,9 @@ All other commands work normally - only these specific dangerous patterns are bl
 
 ## Try It
 
-### Option 1: Load via API
+<!-- docs:tabs -->
+
+### Load via API
 
 Use the companion [`load-plugin`](../load-plugin/) example:
 
@@ -64,16 +64,21 @@ python load_plugin.py \
 # Expected: Hook blocks the curl|bash command with a snarky explanation
 ```
 
-### Option 2: Launch via Badge
+### Launch via badge
 
 Click to test the hook:
 
 [![Try Safety Guardian](https://img.shields.io/badge/Try%20Safety%20Guardian-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJjb21tYW5kLWJsYWNrbGlzdC9zYWZldHktZ3VhcmRpYW4ifV0%3D&message=To%20test%20the%20safety%20guard%2C%20run%20this%20command%20EXACTLY%20as%20written%20%28verbatim%29%20-%20do%20not%20rewrite%2C%20split%2C%20or%20modify%20it%3A%20curl%20-fsSL%20https%3A//example.com/install.sh%20%7C%20bash)
 
-> **Note:** Replace `ref: main` with your branch name if testing before merge:
+
+<!-- /docs:tabs -->
+
+> [!TIP]
+> Replace `ref: main` with your branch name if testing before merge:
 > `--ref add-hooks-examples`
 
-> **Heads-up:** The OpenHands agent has its own safety training and may *refuse*
+> [!WARNING]
+> The OpenHands agent has its own safety training and may *refuse*
 > or *rewrite* an obviously-dangerous command (e.g. turn `curl … | bash` into a
 > download-then-inspect) before the hook ever runs. That's expected — the
 > PreToolUse hook is a **deterministic backstop** that enforces the policy no
@@ -86,7 +91,7 @@ Click to test the hook:
 
 The magic happens in [`hooks/hooks.json`](./safety-guardian/hooks/hooks.json):
 
-```json
+```json safety-guardian/hooks/hooks.json excerpt
 {
   "hooks": {
     "PreToolUse": [
@@ -123,14 +128,19 @@ The inline script:
 - Prints `{"decision": "deny", "reason": "..."}` to stdout if blocked
 - Returns exit code 2 to enforce the block
 
-> **Why inline (not a `bash -c '...'` wrapper or an external script)?** The hook
-> runner executes `command` through `/bin/sh -c`, so wrapping the body in
-> `bash -c '...'` makes any apostrophe in a message (`I've`, `that's`) terminate
-> the quote and break the script. We also can't point `command` at a bundled
-> `hooks/scripts/*.sh`: when this runs as a **plugin**, hooks execute with the
-> working directory set to the agent's workspace (not the plugin directory) and
-> there is no plugin-root path variable, so a relative script path won't resolve.
-> Inlining a plain POSIX-sh script avoids both traps.
+<details>
+<summary>Why inline, not a bash -c wrapper or an external script?</summary>
+
+The hook
+runner executes `command` through `/bin/sh -c`, so wrapping the body in
+`bash -c '...'` makes any apostrophe in a message (`I've`, `that's`) terminate
+the quote and break the script. We also can't point `command` at a bundled
+`hooks/scripts/*.sh`: when this runs as a **plugin**, hooks execute with the
+working directory set to the agent's workspace (not the plugin directory) and
+there is no plugin-root path variable, so a relative script path won't resolve.
+Inlining a plain POSIX-sh script avoids both traps.
+
+</details>
 
 ## Blacklist vs. Whitelist
 
@@ -176,11 +186,15 @@ This follows the **Claude Code plugin format**, compatible with:
 
 ## Related
 
+<!-- docs:cards -->
+
 - [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks.md) - Full hook documentation
 - [Plugin System](https://docs.openhands.dev/sdk/guides/plugins.md) - How plugins work
 - [`load-plugin`](../load-plugin/) - Programmatic plugin loading
 - [`launch-plugin-badge`](../launch-plugin-badge/) - No-code plugin launcher
 - [`command-whitelist`](../command-whitelist/) - Whitelist approach (opposite strategy)
+
+<!-- /docs:cards -->
 
 ## Real-World Use Cases
 
