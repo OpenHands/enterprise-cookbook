@@ -1,4 +1,4 @@
-# custom-agent-with-tool
+# Custom Agent With Tool
 
 Add a **completely custom, server-side tool** to an OpenHands Cloud agent — without
 forking or rebuilding the agent-server. The agent-server loads your tool at
