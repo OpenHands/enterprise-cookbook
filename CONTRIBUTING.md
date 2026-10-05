@@ -2,7 +2,7 @@
 
 Each directory in this repository is a standalone, runnable example for the
 OpenHands API. Examples are read in two places: here on GitHub, and as pages in
-the [Cookbook](https://docs.openhands.dev/cookbook) tab of docs.openhands.dev,
+the [Enterprise Cookbook](https://docs.openhands.dev/cookbook) tab of docs.openhands.dev,
 which is generated from each example's `README.md`.
 
 This guide covers the process: how a change gets from a pull request to the docs
@@ -61,7 +61,7 @@ For each pull request, the **Docs preview** workflow:
 1. Renders the published examples from your branch.
 2. Opens or updates a draft pull request in
    [OpenHands/docs](https://github.com/OpenHands/docs) on a
-   `cookbook-preview/pr-<number>` branch, titled "Cookbook preview: … (do not
+   `cookbook-preview/pr-<number>` branch, titled "Enterprise Cookbook preview: … (do not
    merge)". Mintlify builds a preview site for it.
 3. Waits for the Mintlify deployment and the docs repository's checks, such as
    internal links and link rot.
@@ -115,7 +115,7 @@ dependencies or runs code from the pull request.
 
 ## The Docs Repository
 
-Everything under `cookbook/` in OpenHands/docs, and the Cookbook tab in its
+Everything under `cookbook/` in OpenHands/docs, and the Enterprise Cookbook tab in its
 `docs.json`, is generated from this repository:
 
 - Don't edit those files in the docs repository. The next sync overwrites them.

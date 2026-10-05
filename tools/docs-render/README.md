@@ -1,7 +1,7 @@
 # docs-render
 
 The converter that turns each published example's `README.md` into a page in the
-Cookbook tab of docs.openhands.dev. These are notes for maintaining it.
+Enterprise Cookbook tab of docs.openhands.dev. These are notes for maintaining it.
 
 - To write an example that renders well, see [STYLEGUIDE.md](../../STYLEGUIDE.md).
 - For how pull requests get docs previews and how changes are published, see
@@ -15,9 +15,9 @@ Given this repository and a checkout of OpenHands/docs, `render` writes:
 - `cookbook/index.mdx`, the overview page, built from
   [`cookbook.yaml`](../../cookbook.yaml): one section per category, with a card
   for each example.
-- The Cookbook tab in `docs.json`, placed after `after_tab`, with the overview
+- The Enterprise Cookbook tab in `docs.json`, placed after `after_tab`, with the overview
   group and one group per category. The rest of `docs.json` is rewritten byte for
-  byte, so the diff touches only the Cookbook tab.
+  byte, so the diff touches only the Enterprise Cookbook tab.
 - A redirect to `/cookbook` for each page that is no longer published, so old
   links keep working. A redirect is dropped when its page is published again.
 

@@ -2,7 +2,7 @@
   "name": "cookbook-docs-render",
   "version": "0.1.0",
   "private": true,
-  "description": "Render enterprise-cookbook example READMEs into the OpenHands docs Cookbook tab",
+  "description": "Render enterprise-cookbook example READMEs into the OpenHands docs Enterprise Cookbook tab",
   "type": "module",
   "engines": {
     "node": ">=22"

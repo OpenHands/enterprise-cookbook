@@ -100,7 +100,7 @@ under its primary topic above.
 ## Published on docs.openhands.dev
 
 Examples with an `example.yaml` are also published as pages in the
-[Cookbook](https://docs.openhands.dev/cookbook) tab of the OpenHands docs. Pull
+[Enterprise Cookbook](https://docs.openhands.dev/cookbook) tab of the OpenHands docs. Pull
 requests get a preview link for those pages before merge. See
 [CONTRIBUTING.md](./CONTRIBUTING.md) for how changes are published and
 [STYLEGUIDE.md](./STYLEGUIDE.md) for how to write an example.
