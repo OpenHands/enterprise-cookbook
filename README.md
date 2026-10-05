@@ -102,8 +102,8 @@ under its primary topic above.
 Examples with an `example.yaml` are also published as pages in the
 [Cookbook](https://docs.openhands.dev/cookbook) tab of the OpenHands docs. Pull
 requests get a preview link for those pages before merge. See
-[tools/docs-render](./tools/docs-render/) for how to publish an example and
-write a README that renders well in both places.
+[CONTRIBUTING.md](./CONTRIBUTING.md) for how changes are published and
+[STYLEGUIDE.md](./STYLEGUIDE.md) for how to write an example.
 
 ## API Versions
 

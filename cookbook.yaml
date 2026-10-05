@@ -1,7 +1,7 @@
 ---
 # Settings for the Cookbook tab on docs.openhands.dev.
 # An example is published there once its directory has an example.yaml.
-# See tools/docs-render/README.md.
+# See CONTRIBUTING.md and STYLEGUIDE.md.
 tab: Cookbook
 after_tab: Enterprise
 overview_group: Overview
