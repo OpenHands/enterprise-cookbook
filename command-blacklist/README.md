@@ -1,4 +1,4 @@
-# Command Blacklist with Hooks
+# Command Blacklist
 
 A self-contained example showing how to use **PreToolUse hooks** in a plugin to **blacklist dangerous shell commands**. When the agent tries to execute a risky command, the hook blocks it with helpful (and slightly snarky) feedback.
 
@@ -47,7 +47,7 @@ All other commands work normally - only these specific dangerous patterns are bl
 > that's the blacklist philosophy: block only known-dangerous targets, allow the rest.
 > (So `rm -rf /tmp` is **not** blocked; use the `curl … | bash` demo below to see a block.)
 
-## Try It
+## Run It
 
 <!-- docs:tabs -->
 
