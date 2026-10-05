@@ -1,0 +1,5 @@
+---
+title: Start Sandbox
+description: Start a sandbox without a conversation and run commands via the agent-server REST API.
+category: Sandbox lifecycle
+icon: play

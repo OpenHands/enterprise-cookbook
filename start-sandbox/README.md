@@ -1,4 +1,4 @@
-# Start a Sandbox (no conversation)
+# Start Sandbox
 
 A short script that creates an OpenHands Cloud sandbox via the V1 API,
 waits for it to reach `RUNNING`, then talks directly to the sandbox's
@@ -23,7 +23,7 @@ at the end.
 > example: it clones a repo and runs its `.openhands/setup.sh` in the sandbox,
 > then **attaches a conversation** to the prepared sandbox.
 
-## APIs used
+## APIs Used
 
 ### 1. Cloud App Server — manages the sandbox lifecycle
 
@@ -110,3 +110,13 @@ curl -X DELETE "https://app.all-hands.dev/api/v1/sandboxes/${SID}?sandbox_id=${S
 - To pick a specific runtime image, pass `?sandbox_spec_id=<id>` to the
   `POST /api/v1/sandboxes` call. List available specs with
   `GET /api/v1/sandbox-specs/search`.
+
+## Related
+
+<!-- docs:cards -->
+
+- [`clone-and-attach`](../clone-and-attach/) - Clone a repo and attach a conversation
+- [`archive-sandbox`](../archive-sandbox/) - Delete conversations and release PVCs
+- [OpenHands API Reference](https://app.all-hands.dev/docs) - Full API documentation
+
+<!-- /docs:cards -->
