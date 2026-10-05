@@ -1,4 +1,4 @@
-# Command Whitelist with Hooks
+# Command Whitelist
 
 A self-contained example showing how to use **PreToolUse hooks** in a plugin to **whitelist approved shell commands**. The agent can only execute commands that are explicitly on the approved list - everything else is blocked.
 
