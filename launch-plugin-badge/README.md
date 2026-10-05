@@ -1,4 +1,4 @@
-# Launch a plugin from a link, button, or README badge
+# Launch Plugin Badge
 
 This example builds on [`load-plugin`](../load-plugin/). That one calls the API
 with your key to start a conversation with a plugin loaded. Here we make a
