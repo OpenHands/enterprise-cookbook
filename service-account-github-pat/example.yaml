@@ -1,0 +1,5 @@
+---
+title: Service Account GitHub PAT
+description: Use one OpenHands account as a service account, overriding the managed GITHUB_TOKEN with each user's PAT per conversation.
+category: Secrets & authentication
+icon: id-card

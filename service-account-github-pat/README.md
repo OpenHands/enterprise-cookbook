@@ -1,4 +1,4 @@
-# Using an OpenHands SaaS Account as a Service Account with a GitHub PAT
+# Service Account GitHub PAT
 
 **Question:** *Can I use one OpenHands SaaS account as a service account that performs
 GitHub operations on behalf of many different users, by supplying each user's GitHub
@@ -267,7 +267,7 @@ account**, because they run at conversation start regardless:
 
 ---
 
-## Related examples
+## Related
 
 - [`per-conversation-secrets`](../per-conversation-secrets/) — the `secrets` field at
   start vs. after start, and MCP `${VAR}` expansion.

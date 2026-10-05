@@ -38,7 +38,7 @@ sequenceDiagram
 
 ## Prerequisites
 
-- OpenHands API key  
+- OpenHands API key
 - Python 3.10 or later
 - `requests` library: `pip install requests`
 
