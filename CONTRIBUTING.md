@@ -61,7 +61,7 @@ For each pull request, the **Docs preview** workflow:
 1. Renders the published examples from your branch.
 2. Opens or updates a draft pull request in
    [OpenHands/docs](https://github.com/OpenHands/docs) on a
-   `cookbook-preview/pr-<number>` branch, titled "Cookbook preview: … (do not
+   `cookbook-preview/pr-<number>` branch, titled "Enterprise Cookbook preview: … (do not
    merge)". Mintlify builds a preview site for it.
 3. Waits for the Mintlify deployment and the docs repository's checks, such as
    internal links and link rot.
