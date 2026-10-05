@@ -1,4 +1,4 @@
-# Upload a local skills directory, then start a conversation
+# Upload Skills
 
 This example is a small command-line tool: you hand it a **local agent-skills
 directory** and it provisions a sandbox, copies your skills into the right place
