@@ -1,4 +1,4 @@
-# Custom System Prompt via App Conversation API
+# Custom System Prompt
 
 Override the OpenHands system prompt for one conversation with your own text,
 using the Cloud **App Conversation API**.
