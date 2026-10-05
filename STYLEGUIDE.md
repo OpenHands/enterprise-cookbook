@@ -1,4 +1,4 @@
-# Cookbook Style Guide
+# Enterprise Cookbook Style Guide
 
 How to write an example and its README so it works on GitHub and renders well as
 a page on docs.openhands.dev. For how changes are reviewed and published, see

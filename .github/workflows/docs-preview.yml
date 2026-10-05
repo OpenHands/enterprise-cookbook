@@ -110,7 +110,7 @@ jobs:
                   PR_TITLE: ${{ github.event.pull_request.title }}
               run: |
                   cat > body.md <<EOF
-                  Preview of the Cookbook pages produced by ${PR_URL} (${PR_TITLE}), rendered from ${GITHUB_REPOSITORY}@${HEAD_SHA}.
+                  Preview of the Enterprise Cookbook pages produced by ${PR_URL} (${PR_TITLE}), rendered from ${GITHUB_REPOSITORY}@${HEAD_SHA}.
 
                   **Do not merge.** This draft exists only to get a Mintlify preview. It is updated on every push to the source PR and closed when that PR closes. Merged changes reach the docs through a separate \`cookbook-sync\` PR.
 

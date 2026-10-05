@@ -1,5 +1,5 @@
 ---
-# Publishes merged examples to the docs Cookbook tab through one `cookbook-sync` PR
+# Publishes merged examples to the docs Enterprise Cookbook tab through one `cookbook-sync` PR
 # in OpenHands/docs. The nightly run re-renders from scratch, so missed events and
 # drift repair themselves. During the pilot the sync PR is merged by a human.
 name: Docs publish
@@ -86,9 +86,9 @@ jobs:
             - name: Write docs PR body
               run: |
                   cat > body.md <<EOF
-                  Syncs the Cookbook tab with ${GITHUB_REPOSITORY}@${GITHUB_SHA}.
+                  Syncs the Enterprise Cookbook tab with ${GITHUB_REPOSITORY}@${GITHUB_SHA}.
 
-                  Every file under \`cookbook/\` and the Cookbook tab in \`docs.json\` are generated from that repository. Change them there, not here; edits made directly in this repository are overwritten by the next sync.
+                  Every file under \`cookbook/\` and the Enterprise Cookbook tab in \`docs.json\` are generated from that repository. Change them there, not here; edits made directly in this repository are overwritten by the next sync.
 
                   _Opened automatically by the docs-publish workflow in ${GITHUB_REPOSITORY} ([run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}))._
                   EOF

@@ -1,16 +1,17 @@
 ---
-# Settings for the Cookbook tab on docs.openhands.dev.
+# Settings for the Enterprise Cookbook tab on docs.openhands.dev.
 # An example is published there once its directory has an example.yaml.
 # See CONTRIBUTING.md and STYLEGUIDE.md.
-tab: Cookbook
+tab: Enterprise Cookbook
 after_tab: Enterprise
 overview_group: Overview
-title: Cookbook
-description: Runnable examples for building on the OpenHands API.
+title: Enterprise Cookbook
+description: Runnable examples for building on the OpenHands API with OpenHands Cloud or OpenHands Enterprise.
 intro: |
-    Standalone, runnable examples for the OpenHands API. Each page is generated from an
-    example in [OpenHands/enterprise-cookbook](https://github.com/OpenHands/enterprise-cookbook),
-    where you will find the full source.
+    Standalone, runnable examples for teams building on the OpenHands API with OpenHands Cloud or
+    OpenHands Enterprise. Each page is generated from an example in
+    [OpenHands/enterprise-cookbook](https://github.com/OpenHands/enterprise-cookbook), where you
+    will find the full source.
 
 categories:
     - name: Sandbox lifecycle

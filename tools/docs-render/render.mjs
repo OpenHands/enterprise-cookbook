@@ -1,4 +1,4 @@
-// Renders example READMEs into Mintlify MDX pages for the docs Cookbook tab.
+// Renders example READMEs into Mintlify MDX pages for the docs Enterprise Cookbook tab.
 // Deterministic: output depends only on the files in this repo and the ref.
 // See README.md in this directory for the authoring conventions.
 import fs from 'node:fs';
