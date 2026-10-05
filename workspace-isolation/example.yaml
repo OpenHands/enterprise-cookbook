@@ -1,0 +1,5 @@
+---
+title: Workspace Isolation
+description: Enforce directory boundaries with hooks to prevent agents from navigating or writing outside assigned workspace.
+category: Guardrails
+icon: folder-tree

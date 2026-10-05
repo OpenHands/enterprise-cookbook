@@ -1,4 +1,4 @@
-# Workspace Isolation with Hooks (Advanced)
+# Workspace Isolation
 
 An **advanced** hook example that enforces workspace isolation - preventing agents from navigating or writing outside their assigned directory. This is particularly useful when running **multiple parallel conversations on a local machine**, ensuring each conversation stays in its own sandbox without interfering with others.
 
