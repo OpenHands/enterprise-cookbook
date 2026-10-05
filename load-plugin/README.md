@@ -1,4 +1,4 @@
-# Load a plugin into a conversation (minimal)
+# Load Plugin
 
 The smallest useful recipe for starting an OpenHands Cloud conversation that has
 a **plugin pre-loaded**, using only the V1 App Server REST API. One field —
