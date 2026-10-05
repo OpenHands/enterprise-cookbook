@@ -1,4 +1,4 @@
-# test-mcp-config
+# Test MCP Config
 
 Validate **MCP server configurations** against a real sandbox's agent-server,
 **before** wiring them into a conversation.

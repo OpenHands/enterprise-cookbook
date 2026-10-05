@@ -1,0 +1,5 @@
+---
+title: Test MCP Config
+description: Validate MCP server configs against a sandbox agent-server via POST /api/mcp/test.
+category: Plugins, skills & MCP
+icon: vial
