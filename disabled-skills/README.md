@@ -1,4 +1,4 @@
-# Disabling Skills for Every Conversation on an Account
+# Disabled Skills
 
 Keep specific OpenHands skills out of every conversation an account starts,
 using the Cloud **Settings API** — the same endpoint the UI's *Settings →

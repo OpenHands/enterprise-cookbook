@@ -1,0 +1,5 @@
+---
+title: Disabled Skills
+description: Persist an account-level deny-list of skills so every conversation starts with them disabled.
+category: Custom agents & tools
+icon: ban
