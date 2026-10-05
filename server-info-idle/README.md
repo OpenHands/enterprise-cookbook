@@ -1,4 +1,4 @@
-# Detect an idle agent via `/server_info.idle_time` (the platform's own signal)
+# Server Info Idle
 
 Detect when an agent has gone quiet by polling the agent-server's built-in idle
 timer: `GET /server_info` reports `idle_time`, the seconds since the last

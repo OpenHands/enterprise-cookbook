@@ -1,4 +1,4 @@
-# React to conversation state changes over a WebSocket
+# React to State WebSocket
 
 Two short scripts that react to OpenHands conversation state changes **as they
 happen**, instead of polling a REST endpoint in a loop. Each starts a sandbox,

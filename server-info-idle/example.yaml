@@ -1,0 +1,5 @@
+---
+title: Server Info Idle
+description: Poll the idle_time endpoint to detect when a workspace has gone quiet.
+category: Conversation monitoring & reacting
+icon: clock

@@ -1,0 +1,5 @@
+---
+title: Conversation Metrics
+description: Retrieve cost and token usage metrics for conversations via CLI tool.
+category: Conversation monitoring & reacting
+icon: chart-line

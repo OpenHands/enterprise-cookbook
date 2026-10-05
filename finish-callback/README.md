@@ -1,4 +1,4 @@
-# Finish Callback with a Stop Hook
+# Finish Callback
 
 A self-contained example showing how to **notify an external URL the moment a
 conversation finishes**, using a **Stop hook** — instead of finding out only by

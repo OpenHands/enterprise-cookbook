@@ -1,0 +1,5 @@
+---
+title: Finish Callback
+description: Notify an external URL when a conversation finishes using a Stop hook.
+category: Conversation monitoring & reacting
+icon: bell

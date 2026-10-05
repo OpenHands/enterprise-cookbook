@@ -1,4 +1,4 @@
-# conversation-metrics
+# Conversation Metrics
 
 CLI tool to retrieve cost and token usage metrics for OpenHands conversations.
 

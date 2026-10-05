@@ -1,4 +1,4 @@
-# Detect a conversation's terminal state over the WebSocket (deep dive)
+# Watch Terminal State
 
 A follow-on to [`react-to-state-websocket`](../react-to-state-websocket/). That
 example covers the basics — start a Cloud sandbox, **attach** a conversation (no

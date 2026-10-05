@@ -1,5 +1,5 @@
 ---
-title: Conversation tags
+title: Conversation Tags
 description: Attach key-value metadata to a conversation with tags and read it back from AppConversation.tags.
 category: Conversation monitoring & reacting
 icon: tags

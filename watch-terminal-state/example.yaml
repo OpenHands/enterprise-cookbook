@@ -1,0 +1,5 @@
+---
+title: Watch Terminal State
+description: Detect confirmed terminal execution_status over WebSocket with proper event handling.
+category: Conversation monitoring & reacting
+icon: terminal
