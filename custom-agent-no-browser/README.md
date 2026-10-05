@@ -1,4 +1,4 @@
-# Custom Agent Configuration via Agent-Server API
+# Custom Agent No Browser
 
 This example demonstrates **the correct pattern** for customizing agent tools using the OpenHands agent-server API. It configures an agent that has `terminal`, `file_editor`, and `task_tracker` but **no browser tool**, then verifies the result.
 
