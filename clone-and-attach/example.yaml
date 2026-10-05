@@ -1,0 +1,5 @@
+---
+title: Clone and Attach
+description: Clone a repository and run its setup script in a sandbox, then attach a conversation to the prepared environment.
+category: Sandbox lifecycle
+icon: code-branch
