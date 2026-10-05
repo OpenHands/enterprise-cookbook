@@ -362,7 +362,8 @@ export function updateDocsJson(docsJson, site, removedSlugs = []) {
     ],
   };
   const tabs = docsJson.navigation.tabs;
-  const existing = tabs.findIndex((t) => t.tab === config.tab);
+  // Match on the generated overview page rather than the name, so renaming the tab replaces it.
+  const existing = tabs.findIndex((t) => t.groups?.some((g) => g.pages?.includes(`${DOCS_DIR}/index`)));
   if (existing !== -1) tabs[existing] = tab;
   else {
     const after = tabs.findIndex((t) => t.tab === config.after_tab);

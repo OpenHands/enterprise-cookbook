@@ -221,6 +221,17 @@ test('writeToDocs: pages, index, nav after Enterprise, idempotent', async () => 
   assert.equal(fs.readFileSync(path.join(docs, 'docs.json'), 'utf8'), before);
 });
 
+test('writeToDocs: renaming the tab replaces it in place', async () => {
+  const root = makeRepo({'demo/example.yaml': meta(), 'demo/README.md': '# D\n'});
+  const docs = makeDocs();
+  await writeToDocs(root, docs);
+  fs.writeFileSync(path.join(root, 'cookbook.yaml'), COOKBOOK_YAML.replace('tab: Cookbook', 'tab: Enterprise Cookbook'));
+
+  await writeToDocs(root, docs);
+  const tabs = readJson(path.join(docs, 'docs.json')).navigation.tabs;
+  assert.deepEqual(tabs.map((t) => t.tab), ['Home', 'Enterprise', 'Enterprise Cookbook', 'Last']);
+});
+
 test('writeToDocs: removed examples are deleted and redirected; re-added ones drop the redirect', async () => {
   const root = makeRepo({'demo/example.yaml': meta(), 'demo/README.md': '# D\n'});
   const docs = makeDocs();
