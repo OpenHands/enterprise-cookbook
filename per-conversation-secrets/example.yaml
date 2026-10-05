@@ -1,0 +1,5 @@
+---
+title: Per-Conversation Secrets
+description: Inject per-conversation secrets via REST API as bash env vars and to template an MCP server config bundled in a plugin.
+category: Secrets & authentication
+icon: user-secret
