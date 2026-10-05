@@ -47,7 +47,7 @@ All other commands work normally - only these specific dangerous patterns are bl
 > that's the blacklist philosophy: block only known-dangerous targets, allow the rest.
 > (So `rm -rf /tmp` is **not** blocked; use the `curl … | bash` demo below to see a block.)
 
-## Try It
+## Run It
 
 <!-- docs:tabs -->
 
