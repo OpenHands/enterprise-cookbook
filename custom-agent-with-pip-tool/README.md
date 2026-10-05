@@ -1,4 +1,4 @@
-# custom-agent-with-pip-tool
+# Custom Agent With Pip Tool
 
 Load a custom tool from a **published Python package** in OpenHands Cloud. The package
 is installed via `pip install --target /workspace`, making it importable by the frozen
