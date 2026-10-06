@@ -65,10 +65,10 @@ python load_plugin.py \
 
 Click to test strict mode:
 
-[![Try Strict Mode](https://img.shields.io/badge/Try%20Strict%20Mode-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJjb21tYW5kLXdoaXRlbGlzdC9zdHJpY3QtbW9kZSJ9XQ%3D%3D&message=Install%20the%20requests%20package)
+[![Try Strict Mode](https://img.shields.io/badge/Try%20Strict%20Mode-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAiY29tbWFuZC13aGl0ZWxpc3Qvc3RyaWN0LW1vZGUifV0%3D&message=Install%20the%20requests%20package)
 
-> **Note:** Replace `ref: main` with your branch name if testing before merge:
-> `--ref add-hooks-examples`
+> [!TIP]
+> To test the plugin from a branch before it's merged, pass `--ref <branch>` to `load_plugin.py`.
 
 ## The Hook
 
