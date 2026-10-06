@@ -34,9 +34,9 @@ contains no secrets.
 These are the actual badges this example generates — click one to launch a
 conversation with the bundled [`dad-joke`](./dad-joke/) plugin:
 
-[![Tell a dad joke](https://img.shields.io/badge/Tell%20a%20dad%20joke-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJsYXVuY2gtcGx1Z2luLWJhZGdlL2RhZC1qb2tlIiwgInBhcmFtZXRlcnMiOiB7ImFuaW1hbCI6ICJkdWNrIn19XQ%3D%3D&message=%2Fdad-joke%3Aabout)
+[![Tell a dad joke](https://img.shields.io/badge/Tell%20a%20dad%20joke-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAibGF1bmNoLXBsdWdpbi1iYWRnZS9kYWQtam9rZSIsICJwYXJhbWV0ZXJzIjogeyJhbmltYWwiOiAiZHVjayJ9fV0%3D&message=%2Fdad-joke%3Aabout)
 &nbsp;
-[![Open with dad-joke loaded](https://img.shields.io/badge/Open%20with%20dad--joke%20loaded-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJsYXVuY2gtcGx1Z2luLWJhZGdlL2RhZC1qb2tlIn1d)
+[![Open with dad-joke loaded](https://img.shields.io/badge/Open%20with%20dad--joke%20loaded-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAibGF1bmNoLXBsdWdpbi1iYWRnZS9kYWQtam9rZSJ9XQ%3D%3D)
 
 - **Tell a dad joke** — runs `/dad-joke:about` immediately ([variant 1](#1-run-a-skill-on-launch--entry-command)).
 - **Open with dad-joke loaded** — loads the plugin and waits for your prompt ([variant 2](#2-just-load-the-plugin--user-prompts-after)).
@@ -161,13 +161,13 @@ build_launch_url(
 HTML button:
 
 ```html
-<a href="https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJsYXVuY2gtcGx1Z2luLWJhZGdlL2RhZC1qb2tlIiwgInBhcmFtZXRlcnMiOiB7ImFuaW1hbCI6ICJkdWNrIn19XQ%3D%3D&message=%2Fdad-joke%3Aabout"><button>Tell a dad joke</button></a>
+<a href="https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAibGF1bmNoLXBsdWdpbi1iYWRnZS9kYWQtam9rZSIsICJwYXJhbWV0ZXJzIjogeyJhbmltYWwiOiAiZHVjayJ9fV0%3D&message=%2Fdad-joke%3Aabout"><button>Tell a dad joke</button></a>
 ```
 
 Markdown badge:
 
 ```markdown
-[![Tell a dad joke](https://img.shields.io/badge/Tell%20a%20dad%20joke-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJsYXVuY2gtcGx1Z2luLWJhZGdlL2RhZC1qb2tlIiwgInBhcmFtZXRlcnMiOiB7ImFuaW1hbCI6ICJkdWNrIn19XQ%3D%3D&message=%2Fdad-joke%3Aabout)
+[![Tell a dad joke](https://img.shields.io/badge/Tell%20a%20dad%20joke-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAibGF1bmNoLXBsdWdpbi1iYWRnZS9kYWQtam9rZSIsICJwYXJhbWV0ZXJzIjogeyJhbmltYWwiOiAiZHVjayJ9fV0%3D&message=%2Fdad-joke%3Aabout)
 ```
 
 ### 2. Just load the plugin — user prompts after
@@ -191,7 +191,7 @@ build_launch_url(
 Markdown badge:
 
 ```markdown
-[![Open with dad-joke loaded](https://img.shields.io/badge/Open%20with%20dad--joke%20loaded-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJsYXVuY2gtcGx1Z2luLWJhZGdlL2RhZC1qb2tlIn1d)
+[![Open with dad-joke loaded](https://img.shields.io/badge/Open%20with%20dad--joke%20loaded-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAibGF1bmNoLXBsdWdpbi1iYWRnZS9kYWQtam9rZSJ9XQ%3D%3D)
 ```
 
 | | Variant 1 (entry command) | Variant 2 (load only) |
