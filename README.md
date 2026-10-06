@@ -51,6 +51,7 @@ Inject credentials and manage identity.
 | [service-account-github-pat](./service-account-github-pat/) | Use one OpenHands SaaS account as a **service account**, overriding the managed `GITHUB_TOKEN` with each user's GitHub PAT per conversation |
 | [provision-users](./provision-users/) | **Enterprise:** Superadmin flow to create an org and provision users into it, getting a per-user **API key** to act on their behalf (OEM integrations) |
 | [gpg-commit-signing](./gpg-commit-signing/) | Configure **GPG commit signing** on **every** conversation (not just when a repo is selected) with a `SessionStart` hook that imports a key from a custom secret |
+| [org-admin](./org-admin/) | CLI to find the **super admin** on an OpenHands Enterprise install, promote more, and create team orgs next to personal ones |
 
 ### Plugins, skills & MCP
 

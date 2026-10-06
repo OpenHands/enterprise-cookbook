@@ -20,6 +20,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.8.0",
     "pycodestyle>=2.12.0",
+    "requests>=2.31.0",
 ]
 
 [tool.uv.sources]
@@ -48,6 +49,7 @@ extend-select = ["B006", "B008", "RUF012"]
 
 [tool.ruff.lint.per-file-ignores]
 "conversation-metrics/tests/**/*.py" = ["ARG", "E402"]
+"org-admin/tests/**/*.py" = ["ARG", "E402"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -55,15 +57,16 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.pytest.ini_options]
-testpaths = ["conversation-metrics/tests"]
+testpaths = ["conversation-metrics/tests", "org-admin/tests"]
+pythonpath = ["org-admin"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
 [tool.pyright]
-include = ["conversation-metrics/oh_api", "conversation-metrics/tests"]
-extraPaths = ["conversation-metrics"]
+include = ["conversation-metrics/oh_api", "conversation-metrics/tests", "org-admin"]
+extraPaths = ["conversation-metrics", "org-admin"]
 pythonVersion = "3.10"
 typeCheckingMode = "standard"
 
