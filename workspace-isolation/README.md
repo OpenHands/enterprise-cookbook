@@ -114,7 +114,7 @@ python load_plugin.py \
 
 ### Via Badge
 
-[![Try Sandbox Enforcer](https://img.shields.io/badge/Try%20Sandbox%20Enforcer-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJ3b3Jrc3BhY2UtaXNvbGF0aW9uL3NhbmRib3gtZW5mb3JjZXIifV0%3D&message=Navigate%20to%20%2Ftmp%20and%20create%20a%20file%20there)
+[![Try Sandbox Enforcer](https://img.shields.io/badge/Try%20Sandbox%20Enforcer-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAid29ya3NwYWNlLWlzb2xhdGlvbi9zYW5kYm94LWVuZm9yY2VyIn1d&message=Navigate%20to%20%2Ftmp%20and%20create%20a%20file%20there)
 
 > **Note:** In cloud ephemeral workspaces, this isolation is less critical (each conversation gets its own container), but it still demonstrates the technique for local setups.
 
