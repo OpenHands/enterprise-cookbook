@@ -1,4 +1,4 @@
-# Attach metadata to a conversation with tags
+# Conversation Tags
 
 Stash your own key-value metadata on an OpenHands conversation — for example an
 external `environment_url` or `environment_conversation_id` — and read it back
