@@ -42,7 +42,7 @@ sequenceDiagram
 - Python 3.10 or later
 - `requests` library: `pip install requests`
 
-## Run it
+## Run It
 
 ```bash
 export OH_API_KEY=...        # your https://app.all-hands.dev API key
@@ -80,7 +80,7 @@ Conversation attached to your prepared sandbox:
 Open that URL and you'll find the agent already in a workspace where your repo
 is cloned and set up.
 
-## Point it at your own repo
+## Point It at Your Own Repo
 
 Every input is a flag with an environment-variable fallback, so the script is
 safe to drop into your own automation unchanged:

@@ -1,4 +1,4 @@
-# Per-Conversation Secrets via REST API
+# Per-Conversation Secrets
 
 This example demonstrates how to inject per-conversation secrets into an OpenHands
 conversation using only REST APIs (no WebSocket required), and — importantly — how
