@@ -8,7 +8,7 @@ control, optionally attaching a payload file's contents.
 This is the "push instead of poll" pattern: keep your existing polling loop as a
 safety net, but let the callback wake you up immediately in the common case.
 
-[![Load Finish Callback](https://img.shields.io/badge/Load%20Finish%20Callback-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJmaW5pc2gtY2FsbGJhY2svb2gtZmluaXNoLWNhbGxiYWNrIn1d&message=Say%20hello%20and%20then%20finish.)
+[![Load Finish Callback](https://img.shields.io/badge/Load%20Finish%20Callback-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAiZmluaXNoLWNhbGxiYWNrL29oLWZpbmlzaC1jYWxsYmFjayJ9XQ%3D%3D&message=Say%20hello%20and%20then%20finish.)
 
 > **About the badge:** clicking it loads the plugin into a fresh conversation,
 > but the `/launch` route only carries `plugins` + `message` — **not secrets**.
