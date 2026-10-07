@@ -15,6 +15,7 @@ Environment:
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -66,13 +67,29 @@ def remote_branch(docs: Path, branch: str) -> str | None:
     return run("git", "rev-parse", "FETCH_HEAD", cwd=docs)
 
 
-def changed_pages(docs: Path) -> list[dict]:
+def normalized(text: str, link_ref: str | None) -> list[str]:
+    """Page lines minus the preview's link ref and the table padding it shifts."""
+    if link_ref:
+        text = text.replace(link_ref, "main")
+    return [
+        re.sub(r"\s+", " ", re.sub(r"-{3,}", "---", line))
+        if line.startswith("|")
+        else line
+        for line in text.splitlines()
+    ]
+
+
+def changed_pages(docs: Path, link_ref: str | None) -> list[dict]:
     lines = run(
         "git", "diff", "--name-status", "HEAD~1", "HEAD", "--", "cookbook", cwd=docs
     )
     pages = []
     for row in lines.splitlines():
         status, file = row.split("\t")[0], row.split("\t")[-1]
+        if status[0] == "M" and normalized(
+            run("git", "show", f"HEAD~1:{file}", cwd=docs), link_ref
+        ) == normalized(run("git", "show", f"HEAD:{file}", cwd=docs), link_ref):
+            continue
         slug = Path(file).stem
         pages.append(
             {
@@ -154,7 +171,7 @@ def cmd_push(a: argparse.Namespace) -> None:
         pr_number=str(number),
         pr_url=f"https://github.com/{DOCS_REPO}/pull/{number}",
         head_sha=head_sha,
-        pages=json.dumps(changed_pages(docs)),
+        pages=json.dumps(changed_pages(docs, a.link_ref)),
     )
 
 
@@ -394,6 +411,10 @@ def main() -> None:
     push.add_argument("--title", required=True)
     push.add_argument("--body-file", required=True)
     push.add_argument("--draft", action="store_true")
+    push.add_argument(
+        "--link-ref",
+        help="ref the pages were rendered with when it is not main (previews)",
+    )
     push.set_defaults(func=cmd_push)
 
     wait = sub.add_parser("wait", help="wait for the Mintlify preview and docs checks")

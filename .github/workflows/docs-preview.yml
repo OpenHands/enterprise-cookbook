@@ -123,7 +123,7 @@ jobs:
                   DOCS_TOKEN: ${{ steps.app.outputs.token }}
               run: |
                   python3 src/.github/scripts/docs_sync.py push --artifact artifact --docs docs \
-                    --branch "$PREVIEW_BRANCH" --body-file body.md --draft \
+                    --branch "$PREVIEW_BRANCH" --body-file body.md --draft --link-ref "$HEAD_SHA" \
                     --title "Enterprise Cookbook preview: ${GITHUB_REPOSITORY}#${{ github.event.pull_request.number }} (do not merge)"
 
             - name: Wait for Mintlify preview and docs checks
