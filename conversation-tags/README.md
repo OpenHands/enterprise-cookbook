@@ -8,7 +8,7 @@ exactly this.
 This is the supported replacement for adding a bespoke field (e.g. a custom
 `environment_url` column) to the conversation model: use `tags` instead.
 
-## The two-server split
+## How It Works
 
 OpenHands has a **Cloud app server** (manages accounts, sandboxes, and
 conversations) and, for each sandbox, an **agent server** (the runtime that owns
@@ -36,6 +36,7 @@ immediately (`GET {conversation_url}` → `tags`). The Cloud's
 up within a few seconds — so this example confirms the write on the agent server
 and then *polls* the Cloud read instead of reading once.
 
+> [!NOTE]
 > Why not set tags on the Cloud create call? The Cloud
 > `POST/PATCH /api/v1/app-conversations` payloads do not expose `tags` today —
 > the agent server is the authoritative place to write them, and the Cloud
@@ -43,7 +44,7 @@ and then *polls* the Cloud read instead of reading once.
 > at creation time if you provision the sandbox yourself (see
 > [`clone-and-attach`](../clone-and-attach/)).
 
-## Tag rules
+## Tag Rules
 
 The agent server enforces:
 
@@ -56,7 +57,7 @@ The agent server enforces:
 Need to store something structured or longer than 256 chars? Put a JSON string
 into a single tag value (within the limit), or split across multiple keys.
 
-## Run it
+## Run It
 
 ```bash
 export OH_API_KEY=...        # your https://app.all-hands.dev API key
@@ -69,7 +70,7 @@ python tag_conversation.py
 
 Sample output:
 
-```
+```text
 === start conversation ===
   start-task status: STARTING_CONVERSATION
   start-task status: READY
@@ -92,7 +93,7 @@ round-trip OK: True
   deleted sandbox 3NjFZz5JDyIVUdvxNsXi0R
 ```
 
-## Set your own tags
+## Set Your Own Tags
 
 Pass `--tag KEY=VALUE` (repeatable), and `--keep` to leave the conversation open
 so you can inspect the tags in the UI:
@@ -114,7 +115,7 @@ python tag_conversation.py \
 | `--keep` | — | off | Don't delete the conversation/sandbox |
 | `--poll-timeout` | `POLL_TIMEOUT` | `240` | Seconds to wait for readiness |
 
-## API endpoints used
+## APIs Used
 
 | Endpoint | Server | Purpose |
 |----------|--------|---------|
