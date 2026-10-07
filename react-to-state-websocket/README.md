@@ -13,7 +13,34 @@ which repeatedly `GET` the status until it changes. Here nothing polls the
 *conversation's execution state* — the script blocks on the socket and is woken
 by the server.
 
-## Two ways to get the conversation running
+## How It Works
+
+```mermaid
+flowchart TD
+    A["POST /api/v1/sandboxes<br/>GET …/sandboxes?id=#lt;id#gt; (until RUNNING)"]
+    subgraph ATT["watch_attach.py"]
+        A1["POST /api/v1/app-conversations (attach)"] --> A2["GET …/start-tasks?ids=#lt;id#gt; (poll for id)"]
+    end
+    subgraph DIR["watch_direct.py"]
+        D1["POST {agent}/api/conversations (id returned now)"]
+    end
+    A --> A1
+    A --> D1
+    A2 --> W["WS {agent}/sockets/events/#lt;id#gt;?resend_mode=all<br/># react to states (shared)"]
+    D1 --> W
+    W --> X["DELETE /api/v1/sandboxes/#lt;id#gt;?sandbox_id=#lt;id#gt;<br/># clean up"]
+```
+
+### Why the WebSocket instead of polling?
+
+The agent-server emits a `ConversationStateUpdateEvent` with
+`key == "execution_status"` on every transition. Subscribing means you learn
+about `finished` (or `error`/`stuck`) the instant it happens, with no request
+spam and no latency floor set by your poll interval. The socket also carries the
+other events (`MessageEvent`, `ActionEvent`, `StreamingDeltaEvent`, …) if you
+want to follow the agent's work in real time.
+
+## Two Ways to Get the Conversation Running
 
 Both scripts watch state identically over the same WebSocket. They differ only
 in **how the conversation is created**, and that choice comes with a genuine
@@ -31,71 +58,16 @@ event-driven. `watch_attach.py`'s poll is provisioning latency (waiting for the
 sandbox to prepare skills/repo and start the conversation); once it hands back an
 id, the socket takes over.
 
+> [!NOTE]
 > Both approaches attach to a sandbox first, exactly like
 > [`clone-and-attach`](../clone-and-attach/) — the WebSocket lives on the
 > sandbox's agent-server regardless of which endpoint created the conversation.
 
-## APIs used
-
-### 1. Cloud App Server — manages the sandbox lifecycle
-
-- Base URL: `https://app.all-hands.dev`
-- Auth header: `X-Session-API-Key: <OH_API_KEY>`
-- Endpoints:
-  - `POST /api/v1/sandboxes` — start a sandbox (optional `?sandbox_spec_id=…`)
-  - `GET  /api/v1/sandboxes?id=<id>` — batch-get sandboxes by id
-  - `POST /api/v1/app-conversations` — **attach** a conversation to a sandbox
-    (`watch_attach.py` only); returns a start task
-  - `GET  /api/v1/app-conversations/start-tasks?ids=<id>` — poll for the
-    `app_conversation_id` (`watch_attach.py` only)
-  - `DELETE /api/v1/sandboxes/{id}?sandbox_id=<id>` — clean up
-
-### 2. Agent Server — runs inside the sandbox
-
-- Base URL: the entry in `sandbox.exposed_urls` with `name == "AGENT_SERVER"`.
-- Auth header: `X-Session-API-Key: <session_api_key>` returned by the
-  sandbox-create call (different from your Cloud API key).
-- Endpoints:
-  - `POST /api/conversations` — create a conversation directly
-    (`watch_direct.py` only). Body requires a `workspace` and an `agent` (with
-    an `llm`); an `initial_message` makes it start running immediately.
-  - `GET  /sockets/events/{conversation_id}` — **WebSocket** event stream. This
-    is the shared star of both scripts. Authenticate by sending
-    `{"type": "auth", "session_api_key": "…"}` as the first frame. Add
-    `?resend_mode=all` to replay events already produced since the conversation
-    started (this closes the create→connect race without polling).
-
-> Full Agent Server schema is at `<agent_server_url>/openapi.json` once the
-> sandbox is `RUNNING`.
-
-## The flow
-
-```
-                          ┌─ watch_attach.py ─────────────────────────────────┐
-POST /api/v1/sandboxes    │ POST /api/v1/app-conversations  (attach)          │
-GET  …/sandboxes?id=<id>  │ GET  …/start-tasks?ids=<id>     (poll for id)     │
-  (until RUNNING)         └───────────────────────────────────────────────────┘
-                          ┌─ watch_direct.py ─────────────────────────────────┐
-                          │ POST {agent}/api/conversations  (id returned now) │
-                          └───────────────────────────────────────────────────┘
-WS   {agent}/sockets/events/<id>?resend_mode=all   # react to states (shared)
-DELETE /api/v1/sandboxes/<id>?sandbox_id=<id>      # clean up
-```
-
-### Why the WebSocket instead of polling?
-
-The agent-server emits a `ConversationStateUpdateEvent` with
-`key == "execution_status"` on every transition. Subscribing means you learn
-about `finished` (or `error`/`stuck`) the instant it happens, with no request
-spam and no latency floor set by your poll interval. The socket also carries the
-other events (`MessageEvent`, `ActionEvent`, `StreamingDeltaEvent`, …) if you
-want to follow the agent's work in real time.
-
-## What they print
+## What They Print
 
 `watch_attach.py` (note the short start-task poll, then the socket):
 
-```
+```text
 sandbox: 6MTcHjsITPtO09W0yYLHSd
   sandbox status: RUNNING
 agent: https://zztaextwktekrdgh.prod-runtime.all-hands.dev
@@ -120,7 +92,7 @@ Cleaning up sandbox…
 
 `watch_direct.py` (no start-task poll; id is immediate):
 
-```
+```text
 sandbox: 1ChU3JfCyeKY2hprWBIQ8n
   sandbox status: RUNNING
 agent: https://aurgryilvhwboigr.prod-runtime.all-hands.dev
@@ -137,7 +109,7 @@ conversation: 1239717a-0396-435b-bfb8-f0b857891fd7
 Cleaning up sandbox…
 ```
 
-## Run it
+## Run It
 
 ```bash
 export OH_API_KEY=...        # your https://app.all-hands.dev API key
@@ -194,7 +166,7 @@ Shared by both scripts:
 By default the sandbox is deleted when the script exits. Pass `--keep` to leave
 it running and print the `DELETE` command instead.
 
-## Another option: react from *inside* the sandbox with hooks
+## Another Option: React from *Inside* the Sandbox with Hooks
 
 The WebSocket approach is for a client that holds a connection open and reacts
 **externally**. If instead you want the sandbox itself to act on a lifecycle
@@ -217,7 +189,7 @@ Two examples in this repo show the pattern:
 Rule of thumb: use the **WebSocket** (this example) when an external client
 needs to follow state live; use **hooks** (a plugin) when the reaction should
 happen inside the sandbox on a specific lifecycle event. See the
-[OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks.md) for the
+[OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks) for the
 full list of hook types and their blocking semantics.
 
 ## Notes
@@ -261,3 +233,37 @@ full list of hook types and their blocking semantics.
   yourself (e.g. via Docker). On Cloud, use the WebSocket here, or the in-sandbox
   **`Stop` hook** in [`finish-callback`](../finish-callback/) for a push-style
   finish notification.
+
+## APIs Used
+
+### 1. Cloud App Server — manages the sandbox lifecycle
+
+- Base URL: `https://app.all-hands.dev`
+- Auth header: `X-Session-API-Key: <OH_API_KEY>`
+- Endpoints:
+  - `POST /api/v1/sandboxes` — start a sandbox (optional `?sandbox_spec_id=…`)
+  - `GET  /api/v1/sandboxes?id=<id>` — batch-get sandboxes by id
+  - `POST /api/v1/app-conversations` — **attach** a conversation to a sandbox
+    (`watch_attach.py` only); returns a start task
+  - `GET  /api/v1/app-conversations/start-tasks?ids=<id>` — poll for the
+    `app_conversation_id` (`watch_attach.py` only)
+  - `DELETE /api/v1/sandboxes/{id}?sandbox_id=<id>` — clean up
+
+### 2. Agent Server — runs inside the sandbox
+
+- Base URL: the entry in `sandbox.exposed_urls` with `name == "AGENT_SERVER"`.
+- Auth header: `X-Session-API-Key: <session_api_key>` returned by the
+  sandbox-create call (different from your Cloud API key).
+- Endpoints:
+  - `POST /api/conversations` — create a conversation directly
+    (`watch_direct.py` only). Body requires a `workspace` and an `agent` (with
+    an `llm`); an `initial_message` makes it start running immediately.
+  - `GET  /sockets/events/{conversation_id}` — **WebSocket** event stream. This
+    is the shared star of both scripts. Authenticate by sending
+    `{"type": "auth", "session_api_key": "…"}` as the first frame. Add
+    `?resend_mode=all` to replay events already produced since the conversation
+    started (this closes the create→connect race without polling).
+
+> [!TIP]
+> Full Agent Server schema is at `<agent_server_url>/openapi.json` once the
+> sandbox is `RUNNING`.
