@@ -8,6 +8,7 @@ This example is **self-contained**: it ships its own plugin in
 [`dad-joke/`](./dad-joke/) and loads it straight from this repo on GitHub. No
 external marketplace, no API keys beyond your OpenHands key.
 
+> [!NOTE]
 > A plugin is a small git-hosted bundle of slash commands, skills, hooks, and/or
 > MCP servers (Claude Code "plugin marketplace" format). `dad-joke` ships one of
 > each kind we need: a `/dad-joke:about` slash command that tells a dad joke
@@ -18,7 +19,18 @@ Want a **clickable link / README badge** instead of code? See the companion
 example [`launch-plugin-badge`](../launch-plugin-badge/), which builds on this
 one.
 
-## The one field that matters
+## How It Works
+
+`POST /api/v1/app-conversations` is **asynchronous**. It returns a *start task*,
+not a finished conversation. The script polls
+`GET /api/v1/app-conversations/start-tasks?ids=<task_id>` until the task yields
+an `app_conversation_id`, then prints the conversation URL.
+
+(Omitting `sandbox_id` from the request lets the server provision a fresh
+sandbox. To attach to a sandbox you prepared yourself, pass its id — see
+[`clone-and-attach`](../clone-and-attach/).)
+
+## The One Field That Matters
 
 ```python
 requests.post(
@@ -48,11 +60,12 @@ A plugin spec has three parts:
 | `ref` | Git ref/branch/tag | `main` |
 | `repo_path` | Plugin sub-directory within the source | `load-plugin/dad-joke` |
 
+> [!TIP]
 > The plugin is fetched from the **`ref`** you name. While iterating on a
 > branch, pass `--ref your-branch` so the fetch finds your copy; it resolves to
 > `main` once merged.
 
-## Two ways to drive it
+## Two Ways to Drive It
 
 The `initial_message` decides what happens once the plugin is loaded:
 
@@ -73,18 +86,7 @@ The `initial_message` decides what happens once the plugin is loaded:
    python load_plugin.py --message "Tell me a dad joke"
    ```
 
-## How the call works
-
-`POST /api/v1/app-conversations` is **asynchronous**. It returns a *start task*,
-not a finished conversation. The script polls
-`GET /api/v1/app-conversations/start-tasks?ids=<task_id>` until the task yields
-an `app_conversation_id`, then prints the conversation URL.
-
-(Omitting `sandbox_id` from the request lets the server provision a fresh
-sandbox. To attach to a sandbox you prepared yourself, pass its id — see
-[`clone-and-attach`](../clone-and-attach/).)
-
-## Run it
+## Run It
 
 ```bash
 pip install requests
@@ -106,13 +108,14 @@ python load_plugin.py             # dad-joke + "/dad-joke:about duck"
 | `--secret` | – | _(none)_ — repeatable `KEY=VALUE`; see below |
 | `--poll-timeout` | `POLL_TIMEOUT` | `240` |
 
-## Loading a private plugin
+## Loading a Private Plugin
 
 The bundled plugin is public, but `source` also accepts a **full Git URL**, and a
 `${VAR}` placeholder in the `source` (or `ref`) is expanded against the
 conversation's secrets **just before** the repo is cloned — so you can fetch a
 private plugin without hard-coding a token.
 
+> [!IMPORTANT]
 > **Version requirement.** Secret expansion in the plugin source landed in
 > [software-agent-sdk#3758](https://github.com/OpenHands/software-agent-sdk/pull/3758)
 > and ships in the **agent-server runtime
@@ -165,9 +168,9 @@ Good to know:
 - **HTTPS, not `ssh://`** — the credential travels inside the URL; SSH
   authenticates out-of-band (a key), so there is no placeholder to expand.
 
-## The bundled plugin
+## The Bundled Plugin
 
-```
+```text
 dad-joke/
 ├── .claude-plugin/
 │   └── plugin.json          # manifest: name, entry_command, parameters
@@ -180,15 +183,12 @@ dad-joke/
 
 ## Related
 
-- [`launch-plugin-badge`](../launch-plugin-badge/) — turn this into a no-code
-  launch link, HTML button, or README badge.
-- [Plugin Marketplace](https://docs.openhands.dev/enterprise/plugin-marketplace)
-  — the **plugin directory**: a browseable catalog of plugins (served at
-  `/plugins`) loaded from a marketplace source repo.
-- [Plugins overview](https://docs.openhands.dev/overview/plugins) — what plugins
-  are and the format they follow.
-- [Plugin Launch Flow design doc](https://github.com/OpenHands/OpenHands/blob/main/enterprise/doc/design-doc/plugin-launch-flow.md)
-  — the full marketplace → frontend → app server → SDK journey.
-- [software-agent-sdk#3758](https://github.com/OpenHands/software-agent-sdk/pull/3758)
-  ([SDK v1.29.0](https://github.com/OpenHands/software-agent-sdk/releases/tag/v1.29.0))
-  — the secret expansion behind "Loading a private plugin".
+<!-- docs:cards -->
+
+- [`launch-plugin-badge`](../launch-plugin-badge/) - turn this into a no-code launch link, HTML button, or README badge.
+- [Plugin Marketplace](https://docs.openhands.dev/enterprise/plugin-marketplace) - the **plugin directory**: a browseable catalog of plugins (served at `/plugins`) loaded from a marketplace source repo.
+- [Plugins overview](https://docs.openhands.dev/overview/plugins) - what plugins are and the format they follow.
+- [Plugin Launch Flow design doc](https://github.com/OpenHands/OpenHands/blob/main/enterprise/doc/design-doc/plugin-launch-flow.md) - the full marketplace → frontend → app server → SDK journey.
+- [software-agent-sdk#3758](https://github.com/OpenHands/software-agent-sdk/pull/3758) ([SDK v1.29.0](https://github.com/OpenHands/software-agent-sdk/releases/tag/v1.29.0)) - the secret expansion behind "Loading a private plugin".
+
+<!-- /docs:cards -->
