@@ -14,6 +14,20 @@ Supports both **V0** and **V1** APIs, automatically selecting the appropriate on
 - **Fixture-based testing** - high coverage via recorded API responses
 - **Zero dependencies** - uses only Python standard library
 
+## How It Works
+
+The tool uses a fallback chain to find metrics:
+
+1. **Check conversation version** via `/api/conversations/{id}`
+2. **For V1 conversations**:
+   - First try `/api/v1/app-conversations?ids={id}` which includes a `metrics` object
+   - If metrics are all zeros, fall back to `/api/v1/conversation/{id}/events/search` and extract metrics from `ConversationStateUpdateEvent` at `value.stats.usage_to_metrics.agent`
+3. **For V0 conversations** (or if V1 fails): Use `/api/conversations/{id}/events` and find the latest event with `llm_metrics`
+4. **Last resort**: Use `/api/conversations/{id}/trajectory` and scan for `llm_metrics`
+
+> [!NOTE]
+> **Note:** Some V1 conversations have metrics stored only in events (not in the app-conversations response). The fallback chain ensures these are still retrieved correctly.
+
 ## Installation
 
 No installation required - just make the script executable:
@@ -24,7 +38,7 @@ chmod +x oh-metrics
 
 Requires Python 3.10+.
 
-## Usage
+## Run It
 
 ### Set your API key
 
@@ -40,7 +54,7 @@ export OH_API_KEY="your-api-key"
 
 **Example output (V0 conversation):**
 
-```
+```text
 ────────────────────────────────────────────────────────────
 Conversation: 7f3d57c4e5b2434d9ca78e5e27311137
 Title: Hello and a Programming Joke
@@ -63,7 +77,7 @@ API Version: V0 via V0 (events)
 
 **Example output (V1 conversation):**
 
-```
+```text
 ────────────────────────────────────────────────────────────
 Conversation: 72d40619b8534f9b9de6c3f17a71072d
 Title: 📝 V0 API for Conversation Costs & Tokens
@@ -131,7 +145,7 @@ For debugging or development, you can log all API requests and responses:
 
 This creates timestamped files in `.oh/api-logs/YYYYMMDD-HHMMSS/`:
 
-```
+```text
 .oh/api-logs/20260227-145230/
 ├── 0001-request.json
 ├── 0001-response.json
@@ -140,37 +154,6 @@ This creates timestamped files in `.oh/api-logs/YYYYMMDD-HHMMSS/`:
 ```
 
 Each request/response pair is numbered sequentially. The Authorization header is redacted from logged requests.
-
-## API Endpoints Used
-
-### For V1 Conversations
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/conversations/{id}` | Get conversation info (to determine version) |
-| `GET /api/v1/app-conversations?ids={id}` | Get conversation with metrics |
-| `GET /api/v1/conversation/{id}/events/search` | Fallback: find metrics in `ConversationStateUpdateEvent` |
-
-### For V0 Conversations
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/conversations/{id}` | Get conversation info |
-| `GET /api/conversations/{id}/events` | Get events with `llm_metrics` |
-| `GET /api/conversations/{id}/trajectory` | Fallback for metrics |
-
-## How Metrics Are Retrieved
-
-The tool uses a fallback chain to find metrics:
-
-1. **Check conversation version** via `/api/conversations/{id}`
-2. **For V1 conversations**:
-   - First try `/api/v1/app-conversations?ids={id}` which includes a `metrics` object
-   - If metrics are all zeros, fall back to `/api/v1/conversation/{id}/events/search` and extract metrics from `ConversationStateUpdateEvent` at `value.stats.usage_to_metrics.agent`
-3. **For V0 conversations** (or if V1 fails): Use `/api/conversations/{id}/events` and find the latest event with `llm_metrics`
-4. **Last resort**: Use `/api/conversations/{id}/trajectory` and scan for `llm_metrics`
-
-> **Note:** Some V1 conversations have metrics stored only in events (not in the app-conversations response). The fallback chain ensures these are still retrieved correctly.
 
 ## Metrics Explained
 
@@ -188,7 +171,7 @@ The tool uses a fallback chain to find metrics:
 
 The library is organized into separate modules:
 
-```
+```text
 oh_api/
 ├── __init__.py    # Public API exports
 ├── client.py      # Base HTTP client with logging and fixture support
@@ -256,6 +239,24 @@ Current coverage: **89%** of library code.
 1. Run the CLI with `--log-api-calls` to capture real API responses
 2. Copy relevant response files to `tests/fixtures/`
 3. Rename following the pattern: `GET__api_path_q_param=value.json`
+
+## APIs Used
+
+### For V1 Conversations
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/conversations/{id}` | Get conversation info (to determine version) |
+| `GET /api/v1/app-conversations?ids={id}` | Get conversation with metrics |
+| `GET /api/v1/conversation/{id}/events/search` | Fallback: find metrics in `ConversationStateUpdateEvent` |
+
+### For V0 Conversations
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/conversations/{id}` | Get conversation info |
+| `GET /api/conversations/{id}/events` | Get events with `llm_metrics` |
+| `GET /api/conversations/{id}/trajectory` | Fallback for metrics |
 
 ## License
 
