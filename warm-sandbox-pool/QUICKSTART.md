@@ -24,6 +24,11 @@ uv pip install -e .
 
 ## Run the Demo
 
+> **Running this from an OpenHands sandbox?** Start the controller with
+> `HOST=0.0.0.0 PORT=12000` and open the sandbox's `work-1-…` URL to watch the web UI
+> from your browser. See "Run It From an OpenHands Sandbox" in `README.md`, including
+> its security note (the UI has no login).
+
 > **This creates real sandboxes.** The controller starts `POOL_SIZE` (default 3)
 > sandboxes right away and keeps refilling the pool. For a first try use
 > `POOL_SIZE=1 POOL_THRESHOLD=1`. Press Ctrl-C to stop: unused pool sandboxes are

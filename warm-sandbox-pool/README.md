@@ -100,6 +100,51 @@ Then open http://localhost:5000 in your browser.
 > If the controller is killed with SIGKILL it cannot clean up, so check your sandbox
 > list afterwards.
 
+### Run It From an OpenHands Sandbox and Watch the Web UI
+
+You can run this example inside an OpenHands sandbox (for example, ask an OpenHands
+agent to "run the warm-sandbox-pool example") and watch the web UI from your own
+browser. OpenHands sandboxes publish app ports as "work" URLs, so the agent starts the
+controller on one of those ports, binds it to all interfaces, and gives you the link.
+
+Steps for the agent (or for you, in a sandbox terminal):
+
+1. Pick a published port. The sandbox's environment lists its work URLs, for example
+   `https://work-1-<id>-runtime.<domain>/` for port 12000 and
+   `https://work-2-<id>-runtime.<domain>/` for port 12001.
+2. Start the controller on that port, bound to `0.0.0.0` (the default `127.0.0.1` is
+   not reachable through the work URL):
+
+   ```bash
+   export OH_API_KEY=your_api_key_here
+   OH_API_BASE=https://app.all-hands.dev POOL_SIZE=3 HOST=0.0.0.0 PORT=12000 \
+     python pool_controller.py
+   ```
+
+3. Give the user the matching work URL (`https://work-1-<id>-runtime.<domain>/` for
+   port 12000). They will see the pool fill, can claim a sandbox with Start
+   Conversation, and can watch the refill and the activity feed live.
+4. When the user is done, stop the controller (Ctrl-C or `kill <pid>`; SIGTERM also
+   works). It deletes the unused pool sandboxes. Sandboxes already claimed by
+   conversations are left running, so delete those too if you do not need them.
+
+This was verified through a real work URL: the page, the live stream, and starting a
+conversation all work through the proxy.
+
+> **Security: read this before sharing the link.** The web UI has **no login**.
+> Anyone who has the work URL can open it, and can use **Start Conversation** to run an
+> agent with **any prompt you let them type**, on **your** account (your credits, and
+> any secrets your account makes available to conversations). They cannot reach the
+> sandboxes directly, because session keys never leave the controller, but starting a
+> conversation is still real agent execution. That is an acceptable risk for a short
+> demo with an unguessable URL, so treat it as one:
+>
+> - Run it briefly and stop it when you are done. Do not leave it running.
+> - Do not post the URL publicly.
+> - Keep `POOL_SIZE` small (the default of 3 is fine). Note that each claim triggers a
+>   refill, so the total number of sandboxes grows by one per conversation started.
+> - For anything longer-lived, put authentication in front of it first.
+
 ### What to Expect (and what the pool does not speed up)
 
 The pool removes **sandbox boot plus your init script** from the user's wait. It does
