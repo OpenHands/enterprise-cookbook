@@ -130,7 +130,7 @@ Or pass it via command-line argument (see individual example documentation).
 
 ## Related Resources
 
-- [OpenHands Documentation](https://docs.all-hands.dev/)
+- [OpenHands Documentation](https://docs.openhands.dev/)
 - [OpenHands API Reference](https://app.all-hands.dev/docs)
 - [oh-websocket-example](https://github.com/jpshackelford/oh-websocket-example) - V0 WebSocket API example
 

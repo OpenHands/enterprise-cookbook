@@ -16,7 +16,7 @@ Why upload to ``~/.openhands/skills``? When OpenHands builds a conversation it
 loads *user* skills from ``~/.openhands/skills/`` (alongside public, org, and
 project skills). Dropping your skills there *before* the conversation starts
 means the agent picks them up for that brand-new conversation — no repo
-required. See https://docs.all-hands.dev/ for the skills system.
+required. See https://docs.openhands.dev/ for the skills system.
 
 This builds on `clone-and-attach` (../clone-and-attach/), which prepares a
 sandbox (clone + setup.sh) and then attaches a conversation. Here we prepare the

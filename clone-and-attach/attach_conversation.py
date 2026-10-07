@@ -7,7 +7,7 @@ End-to-end recipe:
   2. Wait for it to reach RUNNING and grab its agent-server URL + session key.
   3. Shallow-clone a git repo into the sandbox via the agent server.
   4. Run the repo's ``.openhands/setup.sh`` (the location OpenHands itself uses,
-     https://docs.all-hands.dev/usage/customization/repository).
+     https://docs.openhands.dev/openhands/usage/customization/repository).
   5. Attach a brand-new conversation to that already-prepared sandbox by passing
      ``sandbox_id`` to ``POST /api/v1/app-conversations``.
 
