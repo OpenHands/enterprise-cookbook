@@ -20,7 +20,7 @@ The [`sandbox-enforcer/`](./sandbox-enforcer/) plugin bundles:
 
 **Scenario:** You're running a local OpenHands instance with multiple conversations in parallel:
 
-```
+```text
 ~/my-projects/
 ├── web-app/      ← Conversation 1: "Refactor the auth module"
 ├── api-server/   ← Conversation 2: "Add rate limiting"
@@ -39,19 +39,15 @@ The [`sandbox-enforcer/`](./sandbox-enforcer/) plugin bundles:
 
 ## How It Works
 
-```
-User to Agent 1: "Navigate to /tmp and create a cache file"
-  ↓
-Agent 1: *prepares: cd /tmp*
-  ↓
-PreToolUse Hook (terminal): *intercepts command*
-  ├─ Detects: cd /tmp (outside workspace)
-  ├─ Workspace: /home/user/my-projects/web-app
-  └─ Returns exit code 2 (block) + message
-  ↓
-Agent 1: *receives block, explains to user*
-  ↓
-User: *Agent stays safely in web-app directory*
+```mermaid
+flowchart TD
+    A["User to Agent 1: #quot;Navigate to /tmp and create a cache file#quot;"] --> B["Agent 1: *prepares: cd /tmp*"]
+    B --> C["PreToolUse Hook (terminal): *intercepts command*"]
+    C --> C1["Detects: cd /tmp (outside workspace)"]
+    C1 --> C2["Workspace: /home/user/my-projects/web-app"]
+    C2 --> C3["Returns exit code 2 (block) + message"]
+    C3 --> D["Agent 1: *receives block, explains to user*"]
+    D --> E["User: *Agent stays safely in web-app directory*"]
 ```
 
 Meanwhile, Agent 2 and Agent 3 work independently in their own workspaces without risk of collision.
@@ -69,7 +65,9 @@ The plugin enforces isolation for:
 - **Write commands:** `create`, `str_replace`, `insert`, `undo_edit` to external paths
 - **Read commands:** `view` is always allowed (can read anywhere)
 
-## Try It
+## Run It
+
+<!-- docs:tabs -->
 
 ### Local Development Setup
 
@@ -116,6 +114,9 @@ python load_plugin.py \
 
 [![Try Sandbox Enforcer](https://img.shields.io/badge/Try%20Sandbox%20Enforcer-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAid29ya3NwYWNlLWlzb2xhdGlvbi9zYW5kYm94LWVuZm9yY2VyIn1d&message=Navigate%20to%20%2Ftmp%20and%20create%20a%20file%20there)
 
+<!-- /docs:tabs -->
+
+> [!NOTE]
 > **Note:** In cloud ephemeral workspaces, this isolation is less critical (each conversation gets its own container), but it still demonstrates the technique for local setups.
 
 ## The `# read-only` Escape Hatch
@@ -139,6 +140,7 @@ The hook detects the `# read-only` comment and allows non-destructive operations
 
 ## Hook Scripts
 
+> [!NOTE]
 > **Inline, not referenced.** When a plugin's PreToolUse hook fires, the hook
 > runner executes the `command` through `/bin/sh -c` with the working directory
 > set to the **agent's workspace**, not the plugin directory — and there is no
@@ -202,7 +204,7 @@ This makes it work in both local and cloud environments.
 
 ## Plugin Structure
 
-```
+```text
 sandbox-enforcer/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin metadata
@@ -248,7 +250,7 @@ All three can be combined for defense-in-depth!
 
 This example is based on [jpshackelford/lxa](https://github.com/jpshackelford/lxa), a production tool that manages multiple OpenHands conversations in parallel:
 
-```
+```text
 lxa schedule --all  # Process all jobs in parallel, each in its own workspace
 ├── Job 1: /data/job-1234/  (isolated)
 ├── Job 2: /data/job-5678/  (isolated)
@@ -287,15 +289,19 @@ fi
 Keep the logic POSIX-sh and inline so it runs correctly when loaded as a plugin
 (see the note under [Hook Scripts](#hook-scripts)).
 
+## Contributing
+
+This example prioritizes clarity and accessibility over completeness. If you're building a production system, refer to the [lxa implementation](https://github.com/jpshackelford/lxa/blob/main/src/hooks/sandbox.py) for a more robust approach.
+
 ## Related
 
-- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks.md) - Official documentation
+<!-- docs:cards -->
+
+- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks) - Official documentation
 - [jpshackelford/lxa](https://github.com/jpshackelford/lxa) - Production implementation
 - [command-blacklist](../command-blacklist/) - Block dangerous commands
 - [command-whitelist](../command-whitelist/) - Whitelist safe commands
 - [`load-plugin`](../load-plugin/) - How to load this plugin
 - [`launch-plugin-badge`](../launch-plugin-badge/) - No-code launcher
 
-## Contributing
-
-This example prioritizes clarity and accessibility over completeness. If you're building a production system, refer to the [lxa implementation](https://github.com/jpshackelford/lxa/blob/main/src/hooks/sandbox.py) for a more robust approach.
+<!-- /docs:cards -->
