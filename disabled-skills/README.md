@@ -16,7 +16,7 @@ Feature shipped in OpenHands Enterprise **1.62.0**
 ([enterprise#335](https://github.com/OpenHands/enterprise/pull/335)) and is
 also live on OpenHands Cloud.
 
-## When to use this
+## When to Use This
 
 Prefer the **account-level** setting for anything policy-shaped:
 
@@ -54,7 +54,7 @@ are matched exactly (case-sensitive) against the `<name>` values returned by
 microagents mixed in; pass a prefix like `?q=github` to see the skill names
 that appear in the `<SKILLS>` block).
 
-## ⚠ Caveat: deny-first means new OpenHands skills opt you in
+## ⚠ Caveat: Deny-First Means New OpenHands Skills Opt You In
 
 The current design is a **deny-list**, not an allow-list: anything that isn't
 explicitly disabled is loaded. That is deliberately drift-tolerant for most
@@ -62,6 +62,7 @@ callers — a name you listed that no longer exists is a no-op, so your config
 survives rename/removal — but it has one consequence worth understanding
 before you ship this to production:
 
+> [!IMPORTANT]
 > **When the OpenHands team adds a new built-in skill in a future SDK
 > release, every account whose `disabled_skills` doesn't name it will start
 > loading it on the next conversation, with no code change on your side.**
@@ -156,122 +157,7 @@ Operational notes for teams running this as policy:
 An explicit allow-list field isn't currently exposed by the API; snapshot +
 deny-the-rest is the supported workaround.
 
-## Prerequisites
-
-```bash
-pip install requests
-export OH_API_KEY="your-api-key"   # Cloud: Profile → API Keys.
-                                   # OHE: Settings → API Keys on your instance.
-```
-
-The account whose API key you use is the one whose `disabled_skills`
-setting the script mutates and then restores.
-
-## Run
-
-```bash
-# default: 'no-git-integrations' gallery, account-level only
-python disabled_skills.py
-
-# pick a different gallery
-python disabled_skills.py --gallery no-docker
-python disabled_skills.py --gallery no-github-automations
-
-# explicit skill names (overrides --gallery)
-python disabled_skills.py --disable docker kubernetes pdflatex
-
-# also start a second conversation with additional per-request skills
-# to demonstrate account ∪ request:
-python disabled_skills.py --per-request
-
-# target an OpenHands Enterprise instance:
-python disabled_skills.py --base-url https://your-ohe.example.com
-
-# keep conversations for inspection (account setting is still restored):
-python disabled_skills.py --keep
-```
-
-The script:
-
-1. Reads and remembers the current account-level `disabled_skills`.
-2. Installs the requested deny-list via `POST /api/v1/settings`.
-3. Starts a conversation with **no** `disabled_skills` on the request,
-   proving the account-level setting alone keeps the skills out.
-4. Parses `<SKILLS>` in `dynamic_context.text` and asserts every disabled
-   name is absent.
-5. Optionally repeats with per-request `disabled_skills` to show union.
-6. Deletes the conversation(s) and sandbox(es), and restores the original
-   account-level setting — the beta instance is left as it was found.
-
-Exit status is non-zero if any verification fails.
-
-### Real output
-
-Captured against `https://app.all-hands.dev` with `--per-request`:
-
-```
-=== install account-level deny-list ===
-  disabling: ['github', 'gitlab', 'bitbucket', 'bitbucket-cloud', 'bitbucket-data-center', 'azure-devops']
-  previous account setting: []
-  new account setting:      ['github', 'gitlab', 'bitbucket', 'bitbucket-cloud', 'bitbucket-data-center', 'azure-devops']
-
-=== conversation 1: no per-request disabled_skills ===
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: SETTING_UP_SKILLS
-  start-task status: SETTING_UP_SKILLS
-  start-task status: STARTING_CONVERSATION
-  start-task status: STARTING_CONVERSATION
-  start-task status: READY
-  conversation: 445d3864b33f4ad594522abddee5169b sandbox: 3sHSpWbMEFoSvEzl9g7NyN
-  account-only: loaded 103 skills
-    - github                                   absent
-    - gitlab                                   absent
-    - bitbucket                                absent
-    - bitbucket-cloud                          absent
-    - bitbucket-data-center                    absent
-    - azure-devops                             absent
-  PASS (account-only): all denied skills absent from SystemPromptEvent
-
-=== conversation 2: per-request disabled_skills = ['flarglebargle'] (union should be ['github', 'gitlab', 'bitbucket', 'bitbucket-cloud', 'bitbucket-data-center', 'azure-devops', 'flarglebargle']) ===
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: WAITING_FOR_SANDBOX
-  start-task status: SETTING_UP_SKILLS
-  start-task status: SETTING_UP_SKILLS
-  start-task status: STARTING_CONVERSATION
-  start-task status: READY
-  conversation: f73fc9ad970a4cb88f1030851f47f8a9 sandbox: 2V2xzlr0wGG6oRLLho59jf
-  account + request: loaded 102 skills
-    - github                                   absent
-    - gitlab                                   absent
-    - bitbucket                                absent
-    - bitbucket-cloud                          absent
-    - bitbucket-data-center                    absent
-    - azure-devops                             absent
-    - flarglebargle                            absent
-  PASS (account + request): all denied skills absent from SystemPromptEvent
-
-=== cleanup ===
-  deleted conversation 445d3864b33f4ad594522abddee5169b
-  deleted sandbox 3sHSpWbMEFoSvEzl9g7NyN
-  deleted conversation f73fc9ad970a4cb88f1030851f47f8a9
-  deleted sandbox 2V2xzlr0wGG6oRLLho59jf
-
-=== restore original account-level setting ===
-  restored account setting: []
-```
-
-Conversation 1 loaded 103 skills; conversation 2 loaded 102 (the extra
-`flarglebargle` denial removed one). Every denied name is absent from
-the `<SKILLS>` block of the `SystemPromptEvent`.
-
-## How it works
+## How It Works
 
 ### 1. Install the account-level deny-list
 
@@ -375,7 +261,122 @@ The script always restores the original account setting, even on error
 (via `try / finally`), so a failed run never leaves the account with a
 stuck deny-list.
 
-## Deny-list gallery
+## Prerequisites
+
+```bash
+pip install requests
+export OH_API_KEY="your-api-key"   # Cloud: Profile → API Keys.
+                                   # OHE: Settings → API Keys on your instance.
+```
+
+The account whose API key you use is the one whose `disabled_skills`
+setting the script mutates and then restores.
+
+## Run It
+
+```bash
+# default: 'no-git-integrations' gallery, account-level only
+python disabled_skills.py
+
+# pick a different gallery
+python disabled_skills.py --gallery no-docker
+python disabled_skills.py --gallery no-github-automations
+
+# explicit skill names (overrides --gallery)
+python disabled_skills.py --disable docker kubernetes pdflatex
+
+# also start a second conversation with additional per-request skills
+# to demonstrate account ∪ request:
+python disabled_skills.py --per-request
+
+# target an OpenHands Enterprise instance:
+python disabled_skills.py --base-url https://your-ohe.example.com
+
+# keep conversations for inspection (account setting is still restored):
+python disabled_skills.py --keep
+```
+
+The script:
+
+1. Reads and remembers the current account-level `disabled_skills`.
+2. Installs the requested deny-list via `POST /api/v1/settings`.
+3. Starts a conversation with **no** `disabled_skills` on the request,
+   proving the account-level setting alone keeps the skills out.
+4. Parses `<SKILLS>` in `dynamic_context.text` and asserts every disabled
+   name is absent.
+5. Optionally repeats with per-request `disabled_skills` to show union.
+6. Deletes the conversation(s) and sandbox(es), and restores the original
+   account-level setting — the beta instance is left as it was found.
+
+Exit status is non-zero if any verification fails.
+
+### Real output
+
+Captured against `https://app.all-hands.dev` with `--per-request`:
+
+```text
+=== install account-level deny-list ===
+  disabling: ['github', 'gitlab', 'bitbucket', 'bitbucket-cloud', 'bitbucket-data-center', 'azure-devops']
+  previous account setting: []
+  new account setting:      ['github', 'gitlab', 'bitbucket', 'bitbucket-cloud', 'bitbucket-data-center', 'azure-devops']
+
+=== conversation 1: no per-request disabled_skills ===
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: SETTING_UP_SKILLS
+  start-task status: SETTING_UP_SKILLS
+  start-task status: STARTING_CONVERSATION
+  start-task status: STARTING_CONVERSATION
+  start-task status: READY
+  conversation: 445d3864b33f4ad594522abddee5169b sandbox: 3sHSpWbMEFoSvEzl9g7NyN
+  account-only: loaded 103 skills
+    - github                                   absent
+    - gitlab                                   absent
+    - bitbucket                                absent
+    - bitbucket-cloud                          absent
+    - bitbucket-data-center                    absent
+    - azure-devops                             absent
+  PASS (account-only): all denied skills absent from SystemPromptEvent
+
+=== conversation 2: per-request disabled_skills = ['flarglebargle'] (union should be ['github', 'gitlab', 'bitbucket', 'bitbucket-cloud', 'bitbucket-data-center', 'azure-devops', 'flarglebargle']) ===
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: WAITING_FOR_SANDBOX
+  start-task status: SETTING_UP_SKILLS
+  start-task status: SETTING_UP_SKILLS
+  start-task status: STARTING_CONVERSATION
+  start-task status: READY
+  conversation: f73fc9ad970a4cb88f1030851f47f8a9 sandbox: 2V2xzlr0wGG6oRLLho59jf
+  account + request: loaded 102 skills
+    - github                                   absent
+    - gitlab                                   absent
+    - bitbucket                                absent
+    - bitbucket-cloud                          absent
+    - bitbucket-data-center                    absent
+    - azure-devops                             absent
+    - flarglebargle                            absent
+  PASS (account + request): all denied skills absent from SystemPromptEvent
+
+=== cleanup ===
+  deleted conversation 445d3864b33f4ad594522abddee5169b
+  deleted sandbox 3sHSpWbMEFoSvEzl9g7NyN
+  deleted conversation f73fc9ad970a4cb88f1030851f47f8a9
+  deleted sandbox 2V2xzlr0wGG6oRLLho59jf
+
+=== restore original account-level setting ===
+  restored account setting: []
+```
+
+Conversation 1 loaded 103 skills; conversation 2 loaded 102 (the extra
+`flarglebargle` denial removed one). Every denied name is absent from
+the `<SKILLS>` block of the `SystemPromptEvent`.
+
+## Deny-List Gallery
 
 Common recipes, all exposed through `--gallery`:
 
@@ -437,7 +438,7 @@ recipes (workflows, monitors, watchdogs) if they're not for this team.
 Roll your own with `--disable name1 name2 name3`. Skill names come from
 `GET /api/v1/skills/search?q=<prefix>`.
 
-## Per-request escape hatch
+## Per-Request Escape Hatch
 
 Set `disabled_skills` on the start request to *extend* the deny-list for
 a single conversation:
@@ -462,22 +463,7 @@ profile-level denial by omitting it here. If the account has `[github]`
 and the request sends `[docker]`, the effective deny-list is
 `[github, docker]`.
 
-## Endpoints used
-
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/api/v1/settings` | GET | Read current account `disabled_skills` (for restore) |
-| `/api/v1/settings` | POST | Install / clear the account-level deny-list |
-| `/api/v1/app-conversations` | POST | Start the conversation (`disabled_skills` optional) |
-| `/api/v1/app-conversations/start-tasks` | GET | Poll the start task for `app_conversation_id` |
-| `/api/v1/conversation/{id}/events/search` | GET | Read `SystemPromptEvent` to verify |
-| `/api/v1/app-conversations/{id}` | DELETE | Delete the conversation |
-| `/api/v1/sandboxes/{id}?sandbox_id={id}` | DELETE | Delete the sandbox |
-| `/api/v1/skills/search?q=<prefix>` | GET | Discover valid skill names for the deny-list |
-
-All calls use `Authorization: Bearer <OH_API_KEY>`.
-
-## Feature availability
+## Feature Availability
 
 - OpenHands Cloud (currently deployed)
 - OpenHands Enterprise **1.62.0+**
@@ -503,18 +489,29 @@ grep -rn "disabled_skills" enterprise/frontend/src/hooks/mutation/
 # -> settings-service.api.ts posts to /api/v1/settings
 ```
 
-## Related examples
+## APIs Used
 
-- [`../custom-system-prompt/`](../custom-system-prompt/) — sibling
-  tutorial covering the other half of enterprise#335: replacing the
-  static system prompt.
-- [`../custom-agent-no-browser/`](../custom-agent-no-browser/) — turn off
-  the `browser` *tool* (a different customisation axis; deny-list here
-  operates on *skills*).
-- [`../load-plugin/`](../load-plugin/) — start a conversation with a
-  plugin pre-loaded, using the same start-task polling flow.
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v1/settings` | GET | Read current account `disabled_skills` (for restore) |
+| `/api/v1/settings` | POST | Install / clear the account-level deny-list |
+| `/api/v1/app-conversations` | POST | Start the conversation (`disabled_skills` optional) |
+| `/api/v1/app-conversations/start-tasks` | GET | Poll the start task for `app_conversation_id` |
+| `/api/v1/conversation/{id}/events/search` | GET | Read `SystemPromptEvent` to verify |
+| `/api/v1/app-conversations/{id}` | DELETE | Delete the conversation |
+| `/api/v1/sandboxes/{id}?sandbox_id={id}` | DELETE | Delete the sandbox |
+| `/api/v1/skills/search?q=<prefix>` | GET | Discover valid skill names for the deny-list |
 
-## Related documentation
+All calls use `Authorization: Bearer <OH_API_KEY>`.
 
+## Related
+
+<!-- docs:cards -->
+
+- [`custom-system-prompt`](../custom-system-prompt/) - sibling tutorial covering the other half of enterprise#335: replacing the static system prompt.
+- [`custom-agent-no-browser`](../custom-agent-no-browser/) - turn off the `browser` *tool* (a different customisation axis; deny-list here operates on *skills*).
+- [`load-plugin`](../load-plugin/) - start a conversation with a plugin pre-loaded, using the same start-task polling flow.
 - [OpenHands Enterprise PR #335](https://github.com/OpenHands/enterprise/pull/335)
 - [OpenHands SDK — Agent Settings](https://docs.openhands.dev/sdk/guides/agent-settings)
+
+<!-- /docs:cards -->
