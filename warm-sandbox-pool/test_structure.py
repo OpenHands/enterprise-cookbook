@@ -23,6 +23,8 @@ def check_structure():
         "static/app.js",
         "static/styles.css",
         "templates/index.html",
+        "templates/login.html",
+        "static/login.js",
     ]
 
     missing = []

@@ -90,7 +90,9 @@ export OH_API_KEY=your_api_key_here
 python pool_controller.py
 ```
 
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:5000 in your browser. The controller prints a random
+**access code** when it starts (look for `ACCESS CODE:` in its output). Paste it into
+the page to sign in. Nothing is served without it, and a restart issues a new code.
 
 > **Heads up: this creates real sandboxes.** The controller immediately starts
 > `POOL_SIZE` sandboxes (default 3) and keeps topping the pool up as you use them.
@@ -121,29 +123,39 @@ Steps for the agent (or for you, in a sandbox terminal):
      python pool_controller.py
    ```
 
-3. Give the user the matching work URL (`https://work-1-<id>-runtime.<domain>/` for
-   port 12000). They will see the pool fill, can claim a sandbox with Start
-   Conversation, and can watch the refill and the activity feed live.
+3. Read the access code from the controller's output (the line starting
+   `ACCESS CODE:`), then give the user **both** the matching work URL
+   (`https://work-1-<id>-runtime.<domain>/` for port 12000) and the code. They paste
+   the code into the page to sign in, then watch the pool fill, claim a sandbox with
+   Start Conversation, and follow the refill and the activity feed live.
 4. When the user is done, stop the controller (Ctrl-C or `kill <pid>`; SIGTERM also
    works). It deletes the unused pool sandboxes. Sandboxes already claimed by
    conversations are left running, so delete those too if you do not need them.
 
-This was verified through a real work URL: the page, the live stream, and starting a
-conversation all work through the proxy.
+This was verified through a real work URL: sign-in, the page, the live stream, and
+starting a conversation all work through the proxy.
 
-> **Security: read this before sharing the link.** The web UI has **no login**.
-> Anyone who has the work URL can open it, and can use **Start Conversation** to run an
-> agent with **any prompt you let them type**, on **your** account (your credits, and
-> any secrets your account makes available to conversations). They cannot reach the
-> sandboxes directly, because session keys never leave the controller, but starting a
-> conversation is still real agent execution. That is an acceptable risk for a short
-> demo with an unguessable URL, so treat it as one:
+> **Security: what the access code does and does not protect.** A work URL is reachable
+> by anyone who has it, so the controller gates **everything** (the page, the status
+> API, the live stream, and Start Conversation) behind a random one-time access code.
+> Without the code, a visitor sees only the sign-in page. The code is 10 characters
+> from a 32-character alphabet, is generated fresh on every start, lives only in the
+> controller's memory, and is checked in constant time.
 >
+> What it does not do: whoever has the URL **and** the code can use **Start
+> Conversation** to run an agent with **any prompt they type**, on **your** account
+> (your credits, and any secrets your account makes available to conversations).
+> Sandboxes themselves are never exposed, because session keys stay in the controller.
+> The rules for a safe demo:
+>
+> - Give the code only to the person who should have it. It is printed in the
+>   controller's output, so do not paste that output into public places.
 > - Run it briefly and stop it when you are done. Do not leave it running.
-> - Do not post the URL publicly.
-> - Keep `POOL_SIZE` small (the default of 3 is fine). Note that each claim triggers a
->   refill, so the total number of sandboxes grows by one per conversation started.
-> - For anything longer-lived, put authentication in front of it first.
+> - Keep `POOL_SIZE` small (the default of 3 is fine). Each claim can trigger a refill,
+>   so the total number of sandboxes grows by one per conversation started.
+> - This is a demo gate, not a production login: there are no user accounts and no
+>   rate limiting on guesses. For anything longer-lived, put real authentication in
+>   front of it.
 
 ### What to Expect (and what the pool does not speed up)
 
@@ -187,9 +199,10 @@ Environment variables:
 - `MAX_FAILURES`: Stop refilling after this many provisioning failures in a row
   (default: `3`). A failed sandbox is deleted immediately, so a broken init script
   cannot silently create sandboxes forever.
-- `HOST`: Address the web UI binds to (default: `127.0.0.1`). The UI has no
-  authentication and can start conversations with your API key, so only widen this
-  on a trusted network.
+- `HOST`: Address the web UI binds to (default: `127.0.0.1`). Use `0.0.0.0` to reach
+  it through an OpenHands sandbox work URL. The UI can start conversations with your
+  API key, so it is gated by the access code the controller prints at startup; see
+  the security note above.
 - `PORT`: Web server port (default: `5000`)
 
 ### Testing the Ruby Service

@@ -26,6 +26,11 @@ class PoolUI {
 
         this.eventSource.onerror = (error) => {
             console.error('EventSource error:', error);
+            // A 401 (e.g. the controller restarted and issued a new access code)
+            // looks like a plain stream error, so ask the API directly.
+            fetch('/api/pool/status').then(response => {
+                if (response.status === 401) window.location.reload();
+            });
             // Try to reconnect after 5 seconds
             setTimeout(() => {
                 if (this.eventSource.readyState === EventSource.CLOSED) {
@@ -45,6 +50,7 @@ class PoolUI {
         this.renderSandboxes(poolStatus.sandboxes.filter(sb => sb.state !== 'ALLOCATED'));
         this.renderClaimed(allocated);
         this.renderStats(poolStatus.stats);
+        this.renderRefillLine(poolStatus);
         this.renderEvents(poolStatus.events);
 
         document.getElementById('halted-notice').style.display =
@@ -80,6 +86,26 @@ class PoolUI {
             this.formatSeconds(stats.avg_attach_seconds, 1);
     }
 
+    renderRefillLine(status) {
+        const inProgress = status.sandboxes.filter(
+            sb => sb.state === 'STARTING' || sb.state === 'PREPARING'
+        ).length;
+        let text;
+        if (status.halted) {
+            text = '⛔ Refilling stopped after repeated failures';
+        } else if (inProgress > 0) {
+            const verb = this.everReady || status.stats.claims > 0 ? 'Refilling' : 'Filling';
+            text = `🔄 ${verb}: ${inProgress} in progress (${status.ready_count} ready, target ${status.pool_size})`;
+        } else if (status.ready_count >= status.pool_size) {
+            text = `✅ Pool is full: ${status.ready_count} ready`;
+        } else if (status.ready_count >= status.threshold) {
+            text = `⏸ ${status.ready_count} of ${status.pool_size} ready. A refill starts when ready drops below ${status.threshold}.`;
+        } else {
+            text = '🔄 Below the threshold: a refill starts within a few seconds';
+        }
+        document.getElementById('refill-line').textContent = text;
+    }
+
     renderClaimed(sandboxes) {
         const container = document.getElementById('claimed-list');
         if (sandboxes.length === 0) {
@@ -110,7 +136,7 @@ class PoolUI {
         const emojis = {
             created: '➕', preparing: '🛠️', ready: '🟢', allocated: '🟦',
             claimed: '✅', failed: '⚠️', deleted: '🗑️', halted: '⛔',
-            miss: '🙅', shutdown: '🛑'
+            miss: '🙅', shutdown: '🛑', refill: '🔄'
         };
         document.getElementById('event-log').innerHTML = events.slice().reverse().map(e => `
             <div class="event-row event-kind-${this.escapeHtml(e.kind)}">
@@ -283,7 +309,8 @@ class PoolUI {
                     🔗 Open Conversation in OpenHands
                 </a>
                 <p style="margin-top: 16px; font-size: 0.875rem; color: #6b7280;">
-                    The pool will automatically provision a new sandbox to refill the allocated slot.
+                    The pool refills automatically once its ready sandboxes drop below
+                    the threshold. Watch the activity feed below.
                 </p>
             `;
         }

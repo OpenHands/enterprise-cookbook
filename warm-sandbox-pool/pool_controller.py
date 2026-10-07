@@ -10,17 +10,21 @@ Usage:
     export OH_API_KEY=your_key_here
     python pool_controller.py
 
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:5000 in your browser. The controller prints a random
+access code when it starts; paste it into the web page to sign in. Nothing is served
+without it.
 
 On exit (Ctrl-C / SIGTERM) every sandbox that is still in the pool is deleted.
 Sandboxes already handed to a conversation are left alone.
 """
 
 import argparse
+import hmac
 import json
 import logging
 import os
 import queue
+import secrets
 import signal
 import sys
 import threading
@@ -32,7 +36,7 @@ from enum import Enum
 from pathlib import Path
 
 import requests
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session
 
 
 # Configure logging
@@ -171,6 +175,9 @@ class PoolController:
         """Background thread that maintains the pool at the target size."""
         # Initial fill
         logger.info(f"Initial pool fill to {self.pool_size} sandboxes")
+        self._record(
+            "refill", f"Filling the pool: starting {self.pool_size} sandbox(es)"
+        )
         for _ in range(self.pool_size):
             self._provision_sandbox()
 
@@ -186,6 +193,12 @@ class PoolController:
                     logger.info(
                         f"Pool below threshold ({ready_count} < {self.threshold}), "
                         f"provisioning {needed} sandbox(es)"
+                    )
+                    self._record(
+                        "refill",
+                        f"{ready_count} ready is below the threshold of "
+                        f"{self.threshold}: starting {needed} sandbox(es) to get "
+                        f"back to {self.pool_size}",
                     )
                     for _ in range(needed):
                         self._provision_sandbox()
@@ -545,14 +558,48 @@ class PoolController:
 
 # Flask Application
 app = Flask(__name__)
+app.secret_key = secrets.token_hex(32)
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 
 pool_controller: PoolController | None = None
+
+# No 0/O or 1/I so the code survives being read out or retyped.
+CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_access_code() -> str:
+    chars = [secrets.choice(CODE_ALPHABET) for _ in range(10)]
+    return "".join(chars[:5]) + "-" + "".join(chars[5:])
+
+
+ACCESS_CODE = generate_access_code()
+
+
+@app.before_request
+def require_access_code():
+    if request.endpoint in ("index", "login", "static"):
+        return None
+    if not session.get("authenticated"):
+        return jsonify({"error": "Access code required"}), 401
+    return None
 
 
 @app.route("/")
 def index():
-    """Serve the main UI."""
-    return render_template("index.html")
+    """Serve the main UI, or the sign-in page until the access code is entered."""
+    if session.get("authenticated"):
+        return render_template("index.html")
+    return render_template("login.html")
+
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    supplied = str((request.get_json(silent=True) or {}).get("code", ""))
+    supplied = supplied.strip().upper()
+    if not hmac.compare_digest(supplied.encode(), ACCESS_CODE.encode()):
+        return jsonify({"error": "That access code is not right"}), 403
+    session["authenticated"] = True
+    return jsonify({"ok": True})
 
 
 @app.route("/api/pool/status")
@@ -656,7 +703,8 @@ def parse_args():
         "--host",
         default=os.environ.get("HOST", "127.0.0.1"),
         help="Web server bind address (env: HOST, default: 127.0.0.1). "
-        "The UI has no authentication; only widen this on a trusted network.",
+        "Use 0.0.0.0 to reach the UI through an OpenHands sandbox work URL. "
+        "The UI is gated by the access code printed at startup.",
     )
     p.add_argument(
         "--init-timeout",
@@ -699,6 +747,7 @@ def main():
 
     logger.info(f"Starting web server on {args.host}:{args.port}")
     logger.info(f"Open http://localhost:{args.port} in your browser")
+    logger.info(f"ACCESS CODE: {ACCESS_CODE}  (paste it into the web page to sign in)")
     try:
         app.run(host=args.host, port=args.port, debug=False, threaded=True)
     finally:

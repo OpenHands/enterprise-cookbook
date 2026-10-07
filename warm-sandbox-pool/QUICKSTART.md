@@ -26,8 +26,9 @@ uv pip install -e .
 
 > **Running this from an OpenHands sandbox?** Start the controller with
 > `HOST=0.0.0.0 PORT=12000` and open the sandbox's `work-1-…` URL to watch the web UI
-> from your browser. See "Run It From an OpenHands Sandbox" in `README.md`, including
-> its security note (the UI has no login).
+> from your browser. Read the `ACCESS CODE:` line from the controller's output and give
+> it to the user to paste into the page. See "Run It From an OpenHands Sandbox" in
+> `README.md`, including its security note.
 
 > **This creates real sandboxes.** The controller starts `POOL_SIZE` (default 3)
 > sandboxes right away and keeps refilling the pool. For a first try use
@@ -43,19 +44,26 @@ python pool_controller.py
 
 # You should see:
 # INFO pool_controller: Pool controller initialized: size=3, threshold=2
+# INFO pool_controller: Initial pool fill to 3 sandboxes
 # INFO pool_controller: Pool manager thread started
-# INFO pool_controller: Starting web server on port 5000
+# INFO pool_controller: Starting web server on 127.0.0.1:5000
 # INFO pool_controller: Open http://localhost:5000 in your browser
+# INFO pool_controller: ACCESS CODE: XXXXX-XXXXX  (paste it into the web page to sign in)
 ```
 
 ## Use the Demo (2-3 minutes)
 
-1. **Open http://localhost:5000** in your browser
+1. **Open http://localhost:5000** in your browser and paste the access code from the
+   controller's output (the `ACCESS CODE:` line) into the sign-in page
 
 2. **Watch the pool initialize**:
    - You'll see "Preparing pool..." message
    - 3 sandboxes will start initializing (roughly 10-30 seconds each)
    - Watch them progress: 🔴 STARTING → 🟡 PREPARING → 🟢 READY
+   - A line under the stats says what the pool is doing, for example
+     "Refilling: 2 in progress (1 ready, target 3)" or "2 of 3 ready. A refill starts
+     when ready drops below 2." (the pool only refills once ready drops *below* the
+     threshold, and checks every 5 seconds)
 
 3. **Start a conversation**:
    - Once at least one sandbox is READY, the conversation UI appears
@@ -128,7 +136,7 @@ Customize via environment variables:
 export OH_API_KEY=your_key
 export OH_API_BASE=https://app.all-hands.dev  # or your instance
 export PORT=5000                               # Web UI port
-export HOST=127.0.0.1                          # UI has no auth; keep it local
+export HOST=127.0.0.1                          # 0.0.0.0 only for a sandbox work URL
 
 # Pool sizing
 export POOL_SIZE=3          # How many ready sandboxes to maintain

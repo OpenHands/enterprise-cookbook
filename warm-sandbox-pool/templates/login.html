@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warm Sandbox Pool - Sign in</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔥 Warm Sandbox Pool</h1>
+            <p class="subtitle">Pre-initialized OpenHands sandboxes with Ruby services ready to go</p>
+        </header>
+
+        <div class="panel login-panel">
+            <h2>🔒 Enter the access code</h2>
+            <p>
+                The pool controller printed an access code in its terminal output when it
+                started. If an OpenHands agent started it for you, the agent will have
+                given you the code along with this link.
+            </p>
+            <form id="login-form" class="login-form">
+                <input id="code-input" type="text" placeholder="XXXXX-XXXXX"
+                       autocomplete="off" autocapitalize="characters" spellcheck="false"
+                       autofocus>
+                <button type="submit" class="btn-primary">Unlock</button>
+            </form>
+            <p id="login-error" class="error-message" style="display: none;"></p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='login.js') }}"></script>
+</body>
+</html>

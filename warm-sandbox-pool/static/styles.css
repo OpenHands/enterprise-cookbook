@@ -119,6 +119,52 @@ header .subtitle {
     color: var(--text-secondary);
 }
 
+.refill-line {
+    margin: 0 0 16px;
+    padding: 8px 12px;
+    background: var(--bg-light);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.login-panel {
+    max-width: 480px;
+    margin: 0 auto 20px;
+}
+
+.login-panel p {
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+}
+
+.login-panel .error-message {
+    color: var(--danger-color);
+    margin: 16px 0 0;
+}
+
+.login-form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.login-form input {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 1.25rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.login-form button {
+    width: auto;
+    padding: 12px 24px;
+}
+
 .section-title {
     font-size: 1rem;
     margin: 0 0 8px;
@@ -182,6 +228,10 @@ header .subtitle {
 .event-time,
 .event-sandbox {
     color: var(--text-secondary);
+}
+
+.event-kind-refill .event-message {
+    color: var(--primary-color);
 }
 
 .event-kind-claimed .event-message {
