@@ -7,6 +7,8 @@ job; it never runs the converter or anything else from the pull request.
 
 Environment:
   DOCS_TOKEN    token that can push branches and open PRs on OpenHands/docs
+  APPROVER_TOKEN  token of a different identity with write access to OpenHands/docs,
+                  used by `approve` because the PR author cannot approve its own PR
   GITHUB_TOKEN  token for this repository (statuses, PR comments)
 """
 
@@ -291,6 +293,71 @@ def cmd_report(a: argparse.Namespace) -> None:
     set_status(a.repo, a.sha, state, description, preview or a.docs_pr_url)
 
 
+def cmd_approve(a: argparse.Namespace) -> None:
+    n = a.pr
+    pr = gh_api(f"repos/{DOCS_REPO}/pulls/{n}")
+    assert isinstance(pr, dict)
+    head = pr["head"]
+    if (
+        pr["state"] != "open"
+        or head["repo"]["full_name"] != DOCS_REPO
+        or head["ref"] != a.branch
+        or head["sha"] != a.sha
+    ):
+        sys.exit(f"{DOCS_REPO}#{n} is not the open {a.branch} PR at {a.sha}")
+
+    files = gh_api(f"repos/{DOCS_REPO}/pulls/{n}/files?per_page=100")
+    assert isinstance(files, list)
+    if len(files) != pr["changed_files"]:
+        sys.exit(f"{DOCS_REPO}#{n} changes more files than can be checked")
+    paths = [
+        path
+        for f in files
+        for path in (f["filename"], f.get("previous_filename", f["filename"]))
+    ]
+    outside = sorted(
+        {p for p in paths if p != "docs.json" and not p.startswith("cookbook/")}
+    )
+    if outside:
+        sys.exit(f"{DOCS_REPO}#{n} changes files outside the Cookbook: {outside}")
+
+    gh_api(
+        f"repos/{DOCS_REPO}/pulls/{n}/reviews",
+        "-X",
+        "POST",
+        "-f",
+        f"commit_id={a.sha}",
+        "-f",
+        "event=APPROVE",
+        "-f",
+        "body=Generated Enterprise Cookbook sync: only cookbook/ and docs.json "
+        "change, the docs checks passed, and the content was reviewed and merged "
+        "in OpenHands/enterprise-cookbook. Approved automatically by the "
+        "docs-publish workflow.",
+        token_env="APPROVER_TOKEN",
+    )
+    for _ in range(24):
+        state = gh_api(f"repos/{DOCS_REPO}/pulls/{n}")
+        assert isinstance(state, dict)
+        if state["mergeable_state"] == "clean":
+            break
+        time.sleep(5)
+    else:
+        sys.exit(f"{DOCS_REPO}#{n} is approved but not mergeable yet; merge it by hand")
+    run(
+        "gh",
+        "pr",
+        "merge",
+        str(n),
+        "--repo",
+        DOCS_REPO,
+        "--squash",
+        "--match-head-commit",
+        a.sha,
+        token=os.environ["APPROVER_TOKEN"],
+    )
+
+
 def cmd_status(a: argparse.Namespace) -> None:
     set_status(a.repo, a.sha, a.state, a.description, a.url)
 
@@ -342,6 +409,14 @@ def main() -> None:
     for name in ("docs-pr-url", "preview-url", "pages", "checks"):
         report.add_argument(f"--{name}", default="")
     report.set_defaults(func=cmd_report)
+
+    approve = sub.add_parser(
+        "approve", help="approve and merge the sync PR if it only changes the Cookbook"
+    )
+    approve.add_argument("--pr", type=int, required=True)
+    approve.add_argument("--branch", required=True)
+    approve.add_argument("--sha", required=True)
+    approve.set_defaults(func=cmd_approve)
 
     status = sub.add_parser("status", help="set the docs-preview commit status")
     for name in ("repo", "sha", "state", "description"):

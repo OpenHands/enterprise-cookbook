@@ -1,7 +1,8 @@
 ---
 # Publishes merged examples to the docs Enterprise Cookbook tab through one `cookbook-sync` PR
 # in OpenHands/docs. The nightly run re-renders from scratch, so missed events and
-# drift repair themselves. During the pilot the sync PR is merged by a human.
+# drift repair themselves. Once the docs checks pass, a second identity approves and
+# merges the sync PR if it only changes cookbook/ and docs.json.
 name: Docs publish
 
 on:
@@ -94,9 +95,35 @@ jobs:
                   EOF
 
             - name: Push sync branch
+              id: push
               env:
                   DOCS_TOKEN: ${{ steps.app.outputs.token }}
               run: |
                   python3 src/.github/scripts/docs_sync.py push --artifact artifact --docs docs \
                     --branch "$SYNC_BRANCH" --body-file body.md \
                     --title "docs(cookbook): sync from ${GITHUB_REPOSITORY}"
+
+            - name: Wait for the docs checks
+              id: wait
+              if: steps.push.outputs.changed == 'true'
+              env:
+                  DOCS_TOKEN: ${{ steps.app.outputs.token }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py wait \
+                    --sha "${{ steps.push.outputs.head_sha }}"
+
+            - name: Approve and merge the sync PR
+              if: steps.push.outputs.changed == 'true' && steps.wait.outputs.ok == 'true'
+              env:
+                  DOCS_TOKEN: ${{ steps.app.outputs.token }}
+                  APPROVER_TOKEN: ${{ secrets.OPENHANDS_BOT_GITHUB_PAT_PUBLIC }}
+              run: |
+                  python3 src/.github/scripts/docs_sync.py approve \
+                    --pr "${{ steps.push.outputs.pr_number }}" --branch "$SYNC_BRANCH" \
+                    --sha "${{ steps.push.outputs.head_sha }}"
+
+            - name: Fail if the docs checks did not pass
+              if: steps.push.outputs.changed == 'true' && steps.wait.outputs.ok != 'true'
+              run: |
+                  echo "::error::The docs checks on ${{ steps.push.outputs.pr_url }} did not pass, so it was not approved."
+                  exit 1

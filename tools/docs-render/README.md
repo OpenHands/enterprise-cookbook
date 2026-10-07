@@ -60,8 +60,8 @@ cd ../docs && npx mint dev
 | [`.github/actions/render-docs`](../../.github/actions/render-docs/action.yml) | Runs `render` against a fresh docs checkout and uploads the result. Has no secrets. |
 | [`.github/workflows/docs-render.yml`](../../.github/workflows/docs-render.yml) | Runs `npm test` and `npm run check` on every pull request and push. |
 | [`.github/workflows/docs-preview.yml`](../../.github/workflows/docs-preview.yml) | Pushes the rendered files to a draft docs pull request per cookbook pull request and reports back. |
-| [`.github/workflows/docs-publish.yml`](../../.github/workflows/docs-publish.yml) | Keeps the `cookbook-sync` docs pull request up to date from `main`. |
-| [`.github/scripts/docs_sync.py`](../../.github/scripts/docs_sync.py) | Pushes to the docs repository, waits for its checks, and posts the comment and `docs-preview` status. |
+| [`.github/workflows/docs-publish.yml`](../../.github/workflows/docs-publish.yml) | Keeps the `cookbook-sync` docs pull request up to date from `main`, then approves and merges it once the docs checks pass. |
+| [`.github/scripts/docs_sync.py`](../../.github/scripts/docs_sync.py) | Pushes to the docs repository, waits for its checks, approves and merges the sync pull request, and posts the comment and `docs-preview` status. |
 
 ## Changing the Converter
 
