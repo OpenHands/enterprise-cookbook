@@ -17,32 +17,24 @@ One file:
   threshold and declare the agent idle. Pass `--local` to run against an
   agent-server you start in Docker instead.
 
-## APIs used
+## How It Works
 
-### Cloud app server — manages the sandbox lifecycle
-
-- Base URL: `https://app.all-hands.dev`, auth header `X-Session-API-Key: <OH_API_KEY>`.
-- `POST /api/v1/sandboxes` — start a sandbox
-- `GET  /api/v1/sandboxes?id=<id>` — poll until `RUNNING`
-- `POST /api/v1/app-conversations` — attach a conversation (returns a start task)
-- `GET  /api/v1/app-conversations/start-tasks?ids=<id>` — poll for the id
-- `DELETE /api/v1/sandboxes/{id}?sandbox_id=<id>` — clean up
-
-### Agent server — `GET /server_info`
-
-Read from the sandbox's `AGENT_SERVER` exposed URL with its `session_api_key`.
-Returns a `ServerInfo` object; the fields this example reads:
-
-| Field | Meaning |
-|-------|---------|
-| `idle_time` | Seconds since the last activity (file ops, agent steps, ACP heartbeat). Drops while the agent works, climbs once it stops. |
-| `uptime` | Seconds since the server started. |
-| `runtime_idle_timeout_seconds` | The platform's own reap threshold — how long `runtime-api` lets a sandbox sit idle before pausing/stopping it (e.g. `1200.0` on Cloud). **Populated on Cloud; `null` on a plain local agent-server, which has no reaper.** |
-
-On Cloud, `runtime-api` reaps a sandbox roughly when
-`idle_time >= runtime_idle_timeout_seconds`. This demo uses a much smaller
-threshold (`--idle-threshold`, default 15s) so you can watch idle detection fire
-quickly against the same `idle_time` signal.
+```mermaid
+sequenceDiagram
+    participant P as idle_poll.py
+    participant S as Cloud app server / sandbox agent-server
+    P->>S: POST /api/v1/sandboxes
+    P->>S: GET /api/v1/sandboxes?id (until RUNNING)
+    P->>S: GET #lt;agent#gt;/server_info (baseline)
+    Note right of S: idle_time, runtime_idle_timeout_seconds
+    P->>S: POST /api/v1/app-conversations
+    Note right of S: attach (no LLM key)#59; poll start-task
+    P->>S: GET #lt;agent#gt;/server_info (loop)
+    Note right of S: idle_time climbing...
+    Note over P: ...until idle_time > threshold -> #quot;agent idle#quot;
+    P->>S: DELETE /api/v1/sandboxes/{id}
+    Note right of S: clean up
+```
 
 ## `idle_time` vs. `execution_status`
 
@@ -60,21 +52,7 @@ Use `idle_time` when you just want "nothing is happening anymore" without
 subscribing to a conversation; use `execution_status` when you need an
 authoritative terminal signal.
 
-## The flow (Cloud)
-
-```
-  idle_poll.py                        Cloud app server / sandbox agent-server
-      |                                          |
-      |-- POST /api/v1/sandboxes --------------->|
-      |-- GET  /api/v1/sandboxes?id (until RUNNING)
-      |-- GET  <agent>/server_info (baseline) -->|  idle_time, runtime_idle_timeout_seconds
-      |-- POST /api/v1/app-conversations ------->|  attach (no LLM key); poll start-task
-      |-- GET  <agent>/server_info (loop) ------>|  idle_time climbing...
-      |   ...until idle_time > threshold -> "agent idle"
-      |-- DELETE /api/v1/sandboxes/{id} -------->|  clean up
-```
-
-## Run it
+## Run It
 
 ```bash
 export OH_API_KEY=...        # your https://app.all-hands.dev API key
@@ -100,9 +78,9 @@ account's configured LLM.
 | `--watch-timeout` | — | `180` |
 | `--keep` | — | off (deletes the sandbox at the end) |
 
-## What it prints
+## What It Prints
 
-```
+```text
 sandbox: 2UqRNuFbMFhgLLntVnla5k
   sandbox status: RUNNING
 agent: https://tsjascgdpnrkidek.prod-runtime.all-hands.dev
@@ -132,7 +110,7 @@ per-conversation terminal state use execution_status)
 Cleaning up sandbox…
 ```
 
-## Running locally without Cloud
+## Running Locally Without Cloud
 
 The audience for this example is **Cloud**. If you have no Cloud account, pass
 `--local` to start an agent-server in Docker and poll it directly:
@@ -169,11 +147,39 @@ reaper — so only the `idle_time` heartbeat is meaningful. Local-only flags:
   on Cloud) is deliberately large for this reason.
 - Full agent-server schema: `<agent-url>/openapi.json`.
 
+## APIs Used
+
+### Cloud app server — manages the sandbox lifecycle
+
+- Base URL: `https://app.all-hands.dev`, auth header `X-Session-API-Key: <OH_API_KEY>`.
+- `POST /api/v1/sandboxes` — start a sandbox
+- `GET  /api/v1/sandboxes?id=<id>` — poll until `RUNNING`
+- `POST /api/v1/app-conversations` — attach a conversation (returns a start task)
+- `GET  /api/v1/app-conversations/start-tasks?ids=<id>` — poll for the id
+- `DELETE /api/v1/sandboxes/{id}?sandbox_id=<id>` — clean up
+
+### Agent server — `GET /server_info`
+
+Read from the sandbox's `AGENT_SERVER` exposed URL with its `session_api_key`.
+Returns a `ServerInfo` object; the fields this example reads:
+
+| Field | Meaning |
+|-------|---------|
+| `idle_time` | Seconds since the last activity (file ops, agent steps, ACP heartbeat). Drops while the agent works, climbs once it stops. |
+| `uptime` | Seconds since the server started. |
+| `runtime_idle_timeout_seconds` | The platform's own reap threshold — how long `runtime-api` lets a sandbox sit idle before pausing/stopping it (e.g. `1200.0` on Cloud). **Populated on Cloud; `null` on a plain local agent-server, which has no reaper.** |
+
+On Cloud, `runtime-api` reaps a sandbox roughly when
+`idle_time >= runtime_idle_timeout_seconds`. This demo uses a much smaller
+threshold (`--idle-threshold`, default 15s) so you can watch idle detection fire
+quickly against the same `idle_time` signal.
+
 ## Related
 
-- [`watch-terminal-state`](../watch-terminal-state/) — authoritative
-  per-conversation terminal state over the WebSocket (push)
-- [`react-to-state-websocket`](../react-to-state-websocket/) — react to *every*
-  `execution_status` transition over the WebSocket
-- [`start-sandbox`](../start-sandbox/) — the sandbox lifecycle this example
-  builds on
+<!-- docs:cards -->
+
+- [`watch-terminal-state`](../watch-terminal-state/) - authoritative per-conversation terminal state over the WebSocket (push)
+- [`react-to-state-websocket`](../react-to-state-websocket/) - react to *every* `execution_status` transition over the WebSocket
+- [`start-sandbox`](../start-sandbox/) - the sandbox lifecycle this example builds on
+
+<!-- /docs:cards -->
