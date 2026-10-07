@@ -1,18 +1,41 @@
-/* Warm Sandbox Pool - UI Styles */
+/* Warm Sandbox Pool - UI Styles
+   Tokens mirror the OpenHands Agent Canvas "DeepSea" dark theme
+   (OpenHands/OpenHands: src/themes, src/styles/agent-server-ui-style-scope.ts). */
 
 :root {
-    --primary-color: #2563eb;
-    --success-color: #10b981;
-    --warning-color: #f59e0b;
-    --danger-color: #ef4444;
-    --info-color: #3b82f6;
-    --bg-light: #f9fafb;
-    --bg-white: #ffffff;
-    --text-primary: #111827;
-    --text-secondary: #6b7280;
-    --border-color: #e5e7eb;
-    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    color-scheme: dark;
+
+    --cool-grey-50: #F7F9FC;
+    --cool-grey-100: #EEF2F7;
+    --cool-grey-300: #C3CDDC;
+    --cool-grey-400: #A3B0C4;
+    --cool-grey-500: #7E8A9E;
+    --cool-grey-700: #4B5468;
+    --cool-grey-800: #383F50;
+    --cool-grey-900: #2C313F;
+    --cool-grey-925: #21252F;
+    --cool-grey-950: #0B0E14;
+    --cool-grey-975: #05070A;
+
+    --oh-color-primary: #C9B974;
+    --oh-accent-foreground: var(--cool-grey-950);
+    --oh-success: #A5E75E;
+    --oh-danger: #E76A5E;
+
+    --primary-color: var(--oh-color-primary);
+    --success-color: var(--oh-success);
+    --warning-color: var(--oh-color-primary);
+    --danger-color: var(--oh-danger);
+    --info-color: var(--cool-grey-400);
+    --bg-light: var(--cool-grey-950);
+    --bg-white: var(--cool-grey-925);
+    --text-primary: var(--cool-grey-100);
+    --text-secondary: var(--cool-grey-400);
+    --border-color: var(--cool-grey-800);
+    --shadow: none;
+    --shadow-lg: none;
+
+    --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
 * {
@@ -22,7 +45,8 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    font-family: -apple-system, 'SF Pro', BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
     background-color: var(--bg-light);
     color: var(--text-primary);
     line-height: 1.6;
@@ -35,23 +59,31 @@ body {
 }
 
 header {
-    text-align: center;
-    margin-bottom: 30px;
-    padding: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding: 16px 24px;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: var(--shadow-lg);
+}
+
+.brand-logo {
+    height: 30px;
+    width: auto;
 }
 
 header h1 {
-    font-size: 2.5rem;
-    margin-bottom: 8px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #ffffff;
 }
 
 header .subtitle {
-    font-size: 1.1rem;
-    opacity: 0.95;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
 }
 
 .main-grid {
@@ -69,9 +101,9 @@ header .subtitle {
 
 .panel {
     background: var(--bg-white);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 24px;
-    box-shadow: var(--shadow);
 }
 
 .panel h2 {
@@ -152,9 +184,11 @@ header .subtitle {
 .login-form input {
     flex: 1;
     padding: 12px;
-    border: 2px solid var(--border-color);
+    border: 1px solid var(--cool-grey-700);
     border-radius: 8px;
-    font-family: 'Courier New', monospace;
+    background: var(--bg-light);
+    color: #ffffff;
+    font-family: var(--font-mono);
     font-size: 1.25rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -213,7 +247,7 @@ header .subtitle {
 .event-log {
     max-height: 320px;
     overflow-y: auto;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 0.8rem;
 }
 
@@ -249,7 +283,7 @@ header .subtitle {
     padding: 10px 12px;
     margin-bottom: 12px;
     border-radius: 8px;
-    background: #fef3c7;
+    background: color-mix(in srgb, var(--warning-color) 10%, transparent);
     font-size: 0.875rem;
 }
 
@@ -270,7 +304,7 @@ header .subtitle {
 
 .sandbox-card {
     padding: 16px;
-    border: 2px solid var(--border-color);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     background: var(--bg-white);
     transition: all 0.2s;
@@ -289,7 +323,7 @@ header .subtitle {
 }
 
 .sandbox-id {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 0.875rem;
     color: var(--text-secondary);
     flex: 1;
@@ -304,28 +338,28 @@ header .subtitle {
 }
 
 .status-starting {
-    background: #fee2e2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--danger-color) 16%, transparent);
+    color: var(--danger-color);
 }
 
 .status-preparing {
-    background: #fef3c7;
-    color: #92400e;
+    background: color-mix(in srgb, var(--warning-color) 16%, transparent);
+    color: var(--warning-color);
 }
 
 .status-ready {
-    background: #d1fae5;
-    color: #065f46;
+    background: color-mix(in srgb, var(--success-color) 16%, transparent);
+    color: var(--success-color);
 }
 
 .status-allocated {
-    background: #dbeafe;
-    color: #1e40af;
+    background: color-mix(in srgb, var(--info-color) 16%, transparent);
+    color: var(--cool-grey-300);
 }
 
 .status-failed {
-    background: #fecaca;
-    color: #7f1d1d;
+    background: color-mix(in srgb, var(--danger-color) 16%, transparent);
+    color: var(--danger-color);
 }
 
 .sandbox-details {
@@ -337,10 +371,10 @@ header .subtitle {
 .sandbox-log {
     margin-top: 8px;
     padding: 8px;
-    background: #f9fafb;
+    background: var(--bg-light);
     border-left: 3px solid var(--info-color);
     border-radius: 4px;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 0.75rem;
     max-height: 100px;
     overflow-y: auto;
@@ -425,7 +459,7 @@ header .subtitle {
 
 .info-box {
     padding: 16px;
-    background: #dbeafe;
+    background: color-mix(in srgb, var(--info-color) 10%, transparent);
     border-left: 4px solid var(--info-color);
     border-radius: 8px;
     margin-bottom: 20px;
@@ -448,24 +482,32 @@ header .subtitle {
 .conversation-form textarea {
     width: 100%;
     padding: 12px;
-    border: 2px solid var(--border-color);
+    border: 1px solid var(--cool-grey-700);
     border-radius: 8px;
+    background: var(--bg-light);
+    color: #ffffff;
     font-family: inherit;
     font-size: 1rem;
     resize: vertical;
     transition: border-color 0.2s;
 }
 
+.conversation-form textarea::placeholder,
+.login-form input::placeholder {
+    color: var(--cool-grey-500);
+}
+
 .conversation-form textarea:focus {
     outline: none;
-    border-color: var(--primary-color);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .btn-primary {
     width: 100%;
     padding: 14px 24px;
     background: var(--primary-color);
-    color: white;
+    color: var(--oh-accent-foreground);
     border: none;
     border-radius: 8px;
     font-size: 1rem;
@@ -476,32 +518,25 @@ header .subtitle {
 }
 
 .btn-primary:hover {
-    background: #1d4ed8;
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
-}
-
-.btn-primary:active {
-    transform: translateY(0);
+    opacity: 0.8;
 }
 
 .btn-primary:disabled {
-    background: var(--text-secondary);
+    opacity: 0.3;
     cursor: not-allowed;
-    transform: none;
 }
 
 .result-area {
     margin-top: 20px;
     padding: 16px;
-    background: #d1fae5;
+    background: color-mix(in srgb, var(--success-color) 10%, transparent);
     border-left: 4px solid var(--success-color);
     border-radius: 8px;
     animation: fadeIn 0.5s;
 }
 
 .result-area.error {
-    background: #fee2e2;
+    background: color-mix(in srgb, var(--danger-color) 12%, transparent);
     border-left-color: var(--danger-color);
 }
 
@@ -517,8 +552,9 @@ header .subtitle {
     display: inline-block;
     margin-top: 12px;
     padding: 10px 20px;
-    background: white;
-    color: var(--primary-color);
+    background: var(--cool-grey-900);
+    border: 1px solid var(--cool-grey-700);
+    color: var(--cool-grey-100);
     text-decoration: none;
     border-radius: 6px;
     font-weight: 600;
@@ -527,15 +563,15 @@ header .subtitle {
 
 .result-area a:hover {
     background: var(--primary-color);
-    color: white;
-    transform: translateY(-2px);
+    border-color: var(--primary-color);
+    color: var(--oh-accent-foreground);
 }
 
 /* Info Section */
 .info-section {
     margin-top: 30px;
     padding-top: 20px;
-    border-top: 2px solid var(--border-color);
+    border-top: 1px solid var(--border-color);
 }
 
 .info-section h3 {
@@ -563,14 +599,14 @@ header .subtitle {
     background: var(--bg-light);
     padding: 2px 6px;
     border-radius: 4px;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 0.875rem;
 }
 
 .note {
     margin-top: 16px;
     padding: 12px;
-    background: #fef3c7;
+    background: color-mix(in srgb, var(--warning-color) 10%, transparent);
     border-left: 4px solid var(--warning-color);
     border-radius: 8px;
     font-size: 0.875rem;
@@ -596,7 +632,7 @@ footer a:hover {
 /* Error State */
 .error-message {
     color: var(--danger-color);
-    background: #fee2e2;
+    background: color-mix(in srgb, var(--danger-color) 12%, transparent);
     padding: 12px;
     border-radius: 8px;
     margin-top: 12px;

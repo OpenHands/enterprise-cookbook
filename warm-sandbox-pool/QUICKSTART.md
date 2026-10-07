@@ -25,14 +25,15 @@ uv pip install -e .
 ## Run the Demo
 
 > **Running this from an OpenHands sandbox?** Start the controller with
-> `HOST=0.0.0.0 PORT=12000` and open the sandbox's `work-1-…` URL to watch the web UI
+> `HOST=0.0.0.0` (the default port, 12000, is published as the `work-1-…` URL) with the
+> default pool settings, and open that URL to watch the web UI
 > from your browser. Read the `ACCESS CODE:` line from the controller's output and give
 > it to the user to paste into the page. See "Run It From an OpenHands Sandbox" in
 > `README.md`, including its security note.
 
 > **This creates real sandboxes.** The controller starts `POOL_SIZE` (default 3)
-> sandboxes right away and keeps refilling the pool. For a first try use
-> `POOL_SIZE=1 POOL_THRESHOLD=1`. Press Ctrl-C to stop: unused pool sandboxes are
+> sandboxes right away and keeps refilling the pool. Keep the defaults (pool of 3,
+> threshold 2) so there is something to watch. Press Ctrl-C to stop: unused pool sandboxes are
 > deleted, sandboxes already attached to a conversation are left running.
 
 ```bash
@@ -46,14 +47,14 @@ python pool_controller.py
 # INFO pool_controller: Pool controller initialized: size=3, threshold=2
 # INFO pool_controller: Initial pool fill to 3 sandboxes
 # INFO pool_controller: Pool manager thread started
-# INFO pool_controller: Starting web server on 127.0.0.1:5000
-# INFO pool_controller: Open http://localhost:5000 in your browser
+# INFO pool_controller: Starting web server on 127.0.0.1:12000
+# INFO pool_controller: Open http://localhost:12000 in your browser
 # INFO pool_controller: ACCESS CODE: XXXXX-XXXXX  (paste it into the web page to sign in)
 ```
 
 ## Use the Demo (2-3 minutes)
 
-1. **Open http://localhost:5000** in your browser and paste the access code from the
+1. **Open http://localhost:12000** in your browser and paste the access code from the
    controller's output (the `ACCESS CODE:` line) into the sign-in page
 
 2. **Watch the pool initialize**:
@@ -135,7 +136,7 @@ Customize via environment variables:
 # Basic config
 export OH_API_KEY=your_key
 export OH_API_BASE=https://app.all-hands.dev  # or your instance
-export PORT=5000                               # Web UI port
+export PORT=12000                              # Web UI port
 export HOST=127.0.0.1                          # 0.0.0.0 only for a sandbox work URL
 
 # Pool sizing
@@ -181,7 +182,7 @@ PORT=8080 python pool_controller.py
 ┌─────────────────┐
 │  Browser (You)  │
 └────────┬────────┘
-         │ http://localhost:5000
+         │ http://localhost:12000
          ▼
 ┌─────────────────────────┐
 │ Flask Web Server        │

@@ -90,14 +90,15 @@ export OH_API_KEY=your_api_key_here
 python pool_controller.py
 ```
 
-Then open http://localhost:5000 in your browser. The controller prints a random
+Then open http://localhost:12000 in your browser. The controller prints a random
 **access code** when it starts (look for `ACCESS CODE:` in its output). Paste it into
 the page to sign in. Nothing is served without it, and a restart issues a new code.
 
 > **Heads up: this creates real sandboxes.** The controller immediately starts
 > `POOL_SIZE` sandboxes (default 3) and keeps topping the pool up as you use them.
-> Try it with `POOL_SIZE=1 POOL_THRESHOLD=1` first. Press Ctrl-C (or send SIGTERM)
-> to stop: every sandbox still sitting in the pool is deleted. Sandboxes already
+> Keep the defaults (pool of 3, threshold 2): a smaller pool leaves nothing to watch,
+> because the refill only starts once ready drops below the threshold. Press Ctrl-C
+> (or send SIGTERM) to stop: every sandbox still sitting in the pool is deleted. Sandboxes already
 > attached to a conversation are left running, like any other conversation sandbox.
 > If the controller is killed with SIGKILL it cannot clean up, so check your sandbox
 > list afterwards.
@@ -111,16 +112,17 @@ controller on one of those ports, binds it to all interfaces, and gives you the 
 
 Steps for the agent (or for you, in a sandbox terminal):
 
-1. Pick a published port. The sandbox's environment lists its work URLs, for example
-   `https://work-1-<id>-runtime.<domain>/` for port 12000 and
-   `https://work-2-<id>-runtime.<domain>/` for port 12001.
-2. Start the controller on that port, bound to `0.0.0.0` (the default `127.0.0.1` is
-   not reachable through the work URL):
+1. Check which port the sandbox publishes. The controller's default, 12000, is the
+   first one: its work URL is `https://work-1-<id>-runtime.<domain>/`. Port 12001 is
+   `https://work-2-<id>-runtime.<domain>/`. If your environment lists different ports,
+   set `PORT` to one of them.
+2. Start the controller with the **default pool settings** (pool of 3, threshold 2;
+   do not lower them, or there is little to watch), bound to `0.0.0.0` because the
+   default `127.0.0.1` is not reachable through the work URL:
 
    ```bash
    export OH_API_KEY=your_api_key_here
-   OH_API_BASE=https://app.all-hands.dev POOL_SIZE=3 HOST=0.0.0.0 PORT=12000 \
-     python pool_controller.py
+   HOST=0.0.0.0 python pool_controller.py
    ```
 
 3. Read the access code from the controller's output (the line starting
@@ -151,8 +153,8 @@ starting a conversation all work through the proxy.
 > - Give the code only to the person who should have it. It is printed in the
 >   controller's output, so do not paste that output into public places.
 > - Run it briefly and stop it when you are done. Do not leave it running.
-> - Keep `POOL_SIZE` small (the default of 3 is fine). Each claim can trigger a refill,
->   so the total number of sandboxes grows by one per conversation started.
+> - Keep the default `POOL_SIZE` of 3. Each claim can trigger a refill, so the total
+>   number of sandboxes grows by one per conversation started.
 > - This is a demo gate, not a production login: there are no user accounts and no
 >   rate limiting on guesses. For anything longer-lived, put real authentication in
 >   front of it.
@@ -203,7 +205,8 @@ Environment variables:
   it through an OpenHands sandbox work URL. The UI can start conversations with your
   API key, so it is gated by the access code the controller prints at startup; see
   the security note above.
-- `PORT`: Web server port (default: `5000`)
+- `PORT`: Web server port (default: `12000`, one of the ports an OpenHands sandbox
+  publishes as a work URL)
 
 ### Testing the Ruby Service
 

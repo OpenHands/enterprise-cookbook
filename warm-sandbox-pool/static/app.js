@@ -151,7 +151,7 @@ class PoolUI {
         const container = document.getElementById('sandbox-list');
 
         if (sandboxes.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #6b7280;">No sandboxes yet...</p>';
+            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No sandboxes yet...</p>';
             return;
         }
 
@@ -308,7 +308,7 @@ class PoolUI {
                 <a href="${this.escapeHtml(data.conversation_url)}" target="_blank">
                     🔗 Open Conversation in OpenHands
                 </a>
-                <p style="margin-top: 16px; font-size: 0.875rem; color: #6b7280;">
+                <p style="margin-top: 16px; font-size: 0.875rem; color: var(--text-secondary);">
                     The pool refills automatically once its ready sandboxes drop below
                     the threshold. Watch the activity feed below.
                 </p>

@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Warm Sandbox Pool Demo</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🔥 Warm Sandbox Pool</h1>
-            <p class="subtitle">Pre-initialized OpenHands sandboxes with Ruby services ready to go</p>
+            <img class="brand-logo" src="{{ url_for('static', filename='openhands-logo.svg') }}" alt="OpenHands">
+            <div class="brand-text">
+                <h1>Warm Sandbox Pool</h1>
+                <p class="subtitle">Pre-initialized OpenHands sandboxes with Ruby services ready to go</p>
+            </div>
         </header>
 
         <div class="main-grid">

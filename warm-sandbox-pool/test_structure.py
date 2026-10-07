@@ -25,6 +25,8 @@ def check_structure():
         "templates/index.html",
         "templates/login.html",
         "static/login.js",
+        "static/openhands-logo.svg",
+        "static/favicon.svg",
     ]
 
     missing = []

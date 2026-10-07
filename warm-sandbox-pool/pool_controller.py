@@ -10,7 +10,7 @@ Usage:
     export OH_API_KEY=your_key_here
     python pool_controller.py
 
-Then open http://localhost:5000 in your browser. The controller prints a random
+Then open http://localhost:12000 in your browser. The controller prints a random
 access code when it starts; paste it into the web page to sign in. Nothing is served
 without it.
 
@@ -696,8 +696,9 @@ def parse_args():
     p.add_argument(
         "--port",
         type=int,
-        default=int(os.environ.get("PORT", "5000")),
-        help="Web server port (env: PORT, default: 5000)",
+        default=int(os.environ.get("PORT", "12000")),
+        help="Web server port (env: PORT, default: 12000, one of the ports an "
+        "OpenHands sandbox publishes as a work URL)",
     )
     p.add_argument(
         "--host",
