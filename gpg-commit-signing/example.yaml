@@ -1,0 +1,5 @@
+---
+title: GPG Commit Signing
+description: Configure GPG commit signing on every conversation with a SessionStart hook that imports a key from a custom secret.
+category: Secrets & authentication
+icon: file-signature

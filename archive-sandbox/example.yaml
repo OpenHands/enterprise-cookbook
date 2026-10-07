@@ -1,0 +1,5 @@
+---
+title: Archive Sandbox
+description: Delete conversations to release their Persistent Volume Claims (PVCs) and free storage resources.
+category: Sandbox lifecycle
+icon: box-archive

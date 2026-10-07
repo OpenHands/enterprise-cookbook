@@ -1,4 +1,4 @@
-# GPG Commit Signing on Every Conversation (SessionStart hook)
+# GPG Commit Signing
 
 Configure **GPG commit signing at the start of every conversation** — not just
 when a repository is selected — using a `SessionStart` hook bundled in a plugin.
@@ -149,7 +149,7 @@ python load_plugin.py \
 Store `gpg_key` as a user secret first (the badge can't carry your private key),
 then click:
 
-[![Try GPG Signer](https://img.shields.io/badge/Try%20GPG%20Signer-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJncGctY29tbWl0LXNpZ25pbmcvZ3BnLXNpZ25lciJ9XQ%3D%3D&message=Show%20me%20the%20output%20of%3A%20git%20config%20--global%20--get%20commit.gpgsign%20and%20git%20config%20--global%20--get%20user.signingkey)
+[![Try GPG Signer](https://img.shields.io/badge/Try%20GPG%20Signer-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAiZ3BnLWNvbW1pdC1zaWduaW5nL2dwZy1zaWduZXIifV0%3D&message=Show%20me%20the%20output%20of%3A%20git%20config%20--global%20--get%20commit.gpgsign%20and%20git%20config%20--global%20--get%20user.signingkey)
 
 > **Note:** Replace `ref: main` with your branch name if testing before merge.
 

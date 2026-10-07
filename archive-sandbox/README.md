@@ -1,8 +1,6 @@
-# Archive Sandbox to Release PVC
+# Archive Sandbox
 
 This example demonstrates how to properly archive/delete OpenHands conversations to release their Persistent Volume Claims (PVCs) and free up storage resources.
-
-## Overview
 
 When you create an OpenHands conversation, the system provisions a **sandbox** (also called a "runtime") that includes:
 
@@ -14,7 +12,7 @@ When you create an OpenHands conversation, the system provisions a **sandbox** (
 
 The PVC persists even when a conversation is paused or stopped, allowing you to resume work later. However, PVCs consume storage quota and incur costs. To release these resources, you need to **delete the conversation**, which triggers full sandbox cleanup.
 
-## How Sandbox Cleanup Works
+## How It Works
 
 Based on the [runtime-api](https://github.com/All-Hands-AI/runtime-api) implementation, here's what happens when you delete a conversation:
 
@@ -60,49 +58,7 @@ def delete_runtime_and_workspace_in_k8s(runtime_id, pod_id: str | None = None):
 
 \* For standard (non-fuse) runtimes, the PVC persists when stopped to allow resuming. A VolumeSnapshot may be taken before deletion for archival purposes.
 
-## Important Concepts
-
-### Warm Runtimes and PVC Types
-
-OpenHands supports two types of sandboxes:
-
-#### Standard (PVC-backed)
-- PVC provisioned at startup
-- Workspace stored on persistent disk
-- PVC persists through pause/resume
-- **Must delete conversation to release PVC**
-
-#### Fuse/Dormant (S3-backed)
-- No PVC provisioned
-- Workspace stored in S3 via fusey
-- Mounted dynamically at claim time
-- Fast resume without PVC snapshots
-- **No PVC cleanup needed** - just deletes S3 objects
-
-### Cleanup Cronjob
-
-The runtime-api runs a cleanup cronjob (`cleanup.py`) every 5 minutes that:
-
-1. **Cleanup stuck PVCs** - Removes PVCs that never bound
-2. **Cleanup terminated pods** - Removes pods with no DB record
-3. **Pause idle runtimes** - Pauses runtimes idle > 30 min (configurable)
-4. **Snapshot and delete idle PVCs** - For paused standard runtimes
-5. **Delete old fuse workspaces** - Purges S3 objects for stopped fuse runtimes > 30 days
-6. **Delete old runtimes** - Removes K8s resources for runtimes stopped > 1 day
-
-**Important**: The cleanup cronjob does NOT delete PVCs for active or recently stopped conversations. You must explicitly delete the conversation to trigger immediate cleanup.
-
-## Files in This Example
-
-- **`archive_sandbox.py`** - Main CLI tool for archiving conversations
-- **`force_cleanup.py`** - Force immediate PVC cleanup by deleting sandbox directly
-- **`example_create_and_archive.py`** - Complete workflow demonstration
-- **`requirements.txt`** - Python dependencies
-- **`README.md`** - This documentation
-
-## Usage
-
-### Prerequisites
+## Prerequisites
 
 ```bash
 # Set your OpenHands API key
@@ -113,6 +69,8 @@ pip install -r requirements.txt
 # or
 pip install requests
 ```
+
+## Run It
 
 ### Quick Start: Complete Workflow Demo
 
@@ -224,6 +182,46 @@ This will:
 5. Release their PVCs
 
 This is useful for cleaning up after testing or development.
+
+## Important Concepts
+
+### Warm Runtimes and PVC Types
+
+OpenHands supports two types of sandboxes:
+
+#### Standard (PVC-backed)
+- PVC provisioned at startup
+- Workspace stored on persistent disk
+- PVC persists through pause/resume
+- **Must delete conversation to release PVC**
+
+#### Fuse/Dormant (S3-backed)
+- No PVC provisioned
+- Workspace stored in S3 via fusey
+- Mounted dynamically at claim time
+- Fast resume without PVC snapshots
+- **No PVC cleanup needed** - just deletes S3 objects
+
+### Cleanup Cronjob
+
+The runtime-api runs a cleanup cronjob (`cleanup.py`) every 5 minutes that:
+
+1. **Cleanup stuck PVCs** - Removes PVCs that never bound
+2. **Cleanup terminated pods** - Removes pods with no DB record
+3. **Pause idle runtimes** - Pauses runtimes idle > 30 min (configurable)
+4. **Snapshot and delete idle PVCs** - For paused standard runtimes
+5. **Delete old fuse workspaces** - Purges S3 objects for stopped fuse runtimes > 30 days
+6. **Delete old runtimes** - Removes K8s resources for runtimes stopped > 1 day
+
+**Important**: The cleanup cronjob does NOT delete PVCs for active or recently stopped conversations. You must explicitly delete the conversation to trigger immediate cleanup.
+
+## Files in This Example
+
+- **`archive_sandbox.py`** - Main CLI tool for archiving conversations
+- **`force_cleanup.py`** - Force immediate PVC cleanup by deleting sandbox directly
+- **`example_create_and_archive.py`** - Complete workflow demonstration
+- **`requirements.txt`** - Python dependencies
+- **`README.md`** - This documentation
 
 ## Best Practices
 
@@ -369,52 +367,6 @@ curl -X POST \
 python archive_sandbox.py archive <conversation_id>
 ```
 
-## API Endpoints for PVC Cleanup
-
-### Enterprise-Server API (OpenHands Cloud)
-
-You can use these endpoints with just your `OH_API_KEY` - **no direct runtime-api access required**:
-
-| Endpoint | Method | Purpose | PVC Cleanup |
-|----------|--------|---------|-------------|
-| `/api/v1/app-conversations/{conversation_id}` | DELETE | Delete conversation | ✅ Yes, if no other conversations use sandbox |
-| `/api/v1/sandboxes/{sandbox_id}` | DELETE | Force delete sandbox | ✅ **Immediate** - always deletes PVC |
-| `/api/v1/sandboxes/{sandbox_id}/pause` | POST | Pause sandbox | ❌ No - preserves PVC |
-| `/api/organizations/{org_id}/conversations/{conversation_id}/stop` | POST | Stop conversation | ❌ No - preserves PVC |
-
-**Key Insight**: Both conversation DELETE and sandbox DELETE work through the enterprise-server API. You do **NOT** need direct runtime-api access to force PVC cleanup!
-
-### How It Works
-
-```
-User → Enterprise-Server API → Runtime-API → Kubernetes
-       (OH_API_KEY)            (internal)     (PVC deletion)
-```
-
-When you call `DELETE /api/v1/sandboxes/{sandbox_id}`:
-1. Enterprise-Server validates your API key
-2. Calls runtime-api's `/stop` endpoint internally
-3. Runtime-api executes `delete_runtime_and_workspace_in_k8s()`
-4. PVC is immediately deleted from Kubernetes
-
-### Runtime-API Direct Access (Optional)
-
-If you have direct runtime-api access (e.g., via port-forward for testing), you can also use:
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/stop` | POST | Stop runtime and delete all resources |
-| `/pause` | POST | Pause runtime (keeps PVC) |
-| `/list` | GET | List all runtimes |
-
-However, **in production you should use the enterprise-server API** (sandbox DELETE) which provides proper authentication, rate limiting, and audit logging.
-
-## Related Resources
-
-- [OpenHands Runtime API](https://github.com/All-Hands-AI/runtime-api) - The service managing sandboxes
-- [OpenHands Cloud API Documentation](https://app.all-hands.dev/openapi.json) - Full API reference
-- [Kubernetes PVC Documentation](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
-
 ## Summary
 
 **Key Takeaways**:
@@ -439,3 +391,55 @@ However, **in production you should use the enterprise-server API** (sandbox DEL
 | Clean up all idle sandboxes | Bulk sandbox cleanup | `python force_cleanup.py --cleanup-idle` |
 
 When in doubt, remember: **DELETE sandbox → Immediate PVC release → Storage freed instantly** ✨
+
+## APIs Used
+
+### Enterprise-Server API (OpenHands Cloud)
+
+You can use these endpoints with just your `OH_API_KEY` - **no direct runtime-api access required**:
+
+| Endpoint | Method | Purpose | PVC Cleanup |
+|----------|--------|---------|-------------|
+| `/api/v1/app-conversations/{conversation_id}` | DELETE | Delete conversation | ✅ Yes, if no other conversations use sandbox |
+| `/api/v1/sandboxes/{sandbox_id}` | DELETE | Force delete sandbox | ✅ **Immediate** - always deletes PVC |
+| `/api/v1/sandboxes/{sandbox_id}/pause` | POST | Pause sandbox | ❌ No - preserves PVC |
+| `/api/organizations/{org_id}/conversations/{conversation_id}/stop` | POST | Stop conversation | ❌ No - preserves PVC |
+
+**Key Insight**: Both conversation DELETE and sandbox DELETE work through the enterprise-server API. You do **NOT** need direct runtime-api access to force PVC cleanup!
+
+### How It Works
+
+```mermaid
+flowchart LR
+    User -->|OH_API_KEY| ES[Enterprise-Server API]
+    ES -->|internal| RA[Runtime-API]
+    RA -->|PVC deletion| K8s[Kubernetes]
+```
+
+When you call `DELETE /api/v1/sandboxes/{sandbox_id}`:
+1. Enterprise-Server validates your API key
+2. Calls runtime-api's `/stop` endpoint internally
+3. Runtime-api executes `delete_runtime_and_workspace_in_k8s()`
+4. PVC is immediately deleted from Kubernetes
+
+### Runtime-API Direct Access (Optional)
+
+If you have direct runtime-api access (e.g., via port-forward for testing), you can also use:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/stop` | POST | Stop runtime and delete all resources |
+| `/pause` | POST | Pause runtime (keeps PVC) |
+| `/list` | GET | List all runtimes |
+
+However, **in production you should use the enterprise-server API** (sandbox DELETE) which provides proper authentication, rate limiting, and audit logging.
+
+## Related
+
+<!-- docs:cards -->
+
+- [OpenHands Runtime API](https://github.com/All-Hands-AI/runtime-api) - The service managing sandboxes
+- [OpenHands Cloud API Documentation](https://app.all-hands.dev/openapi.json) - Full API reference
+- [Kubernetes PVC Documentation](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) - Persistent volume concepts
+
+<!-- /docs:cards -->

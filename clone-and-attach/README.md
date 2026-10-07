@@ -1,4 +1,4 @@
-# Clone a repo, run setup, then attach a conversation
+# Clone and Attach
 
 This example provisions a sandbox **yourself** — shallow-cloning a git repo and
 running its setup script — and only *then* hands it to an OpenHands agent by
@@ -8,29 +8,19 @@ It builds directly on [`start-sandbox`](../start-sandbox/), which shows the bare
 sandbox lifecycle. Read that one first if the sandbox/agent-server split is new
 to you.
 
-## Why would I do this?
+## How It Works
 
-Normally you start a conversation and OpenHands clones your selected repository
-for you. Sometimes you want more control *before* the agent gets involved:
-
-- pre-warm an environment so the agent starts instantly on an expensive setup,
-- check out a specific commit, tag, or a sub-path of a monorepo,
-- clone from a mirror or run custom bootstrapping the default flow doesn't do,
-- reuse one prepared sandbox for several scripted conversations.
-
-The trick is a single field: `POST /api/v1/app-conversations` accepts a
-`sandbox_id`. Pass the id of a sandbox you already prepared and the new
-conversation attaches to it instead of creating a fresh one.
-
-## The flow
-
-```
-POST /api/v1/sandboxes                     # 1. start a sandbox (no conversation)
-GET  /api/v1/sandboxes?id=<id>             # 2. poll until status == RUNNING
-POST {agent}/api/bash/execute_bash_command # 3. git clone --depth 1 <repo>
-POST {agent}/api/bash/execute_bash_command # 4. bash .openhands/setup.sh
-POST /api/v1/app-conversations             # 5. attach a conversation (sandbox_id=<id>)
-GET  /api/v1/app-conversations/start-tasks # 5b. poll for the app_conversation_id
+```mermaid
+sequenceDiagram
+    participant You
+    participant Cloud as Cloud app server
+    participant Agent as Sandbox agent server
+    You->>Cloud: POST /api/v1/sandboxes (1. start a sandbox, no conversation)
+    You->>Cloud: GET /api/v1/sandboxes?id=#lt;id#gt; (2. poll until status == RUNNING)
+    You->>Agent: POST /api/bash/execute_bash_command (3. git clone --depth 1 #lt;repo#gt;)
+    You->>Agent: POST /api/bash/execute_bash_command (4. bash .openhands/setup.sh)
+    You->>Cloud: POST /api/v1/app-conversations (5. attach a conversation, sandbox_id=#lt;id#gt;)
+    You->>Cloud: GET /api/v1/app-conversations/start-tasks (5b. poll for the app_conversation_id)
 ```
 
 Steps 1–2 use the **Cloud app server** (auth header `X-Session-API-Key: <OH_API_KEY>`).
@@ -56,7 +46,7 @@ itself. Poll `GET /api/v1/app-conversations/start-tasks?ids=<task_id>` until it
 reports an `app_conversation_id`, then open
 `https://app.all-hands.dev/conversations/<app_conversation_id>`.
 
-## Run it
+## Run It
 
 ```bash
 export OH_API_KEY=...        # your https://app.all-hands.dev API key
@@ -94,7 +84,21 @@ Conversation attached to your prepared sandbox:
 Open that URL and you'll find the agent already in a workspace where your repo
 is cloned and set up.
 
-## Point it at your own repo
+## Why Would I Do This?
+
+Normally you start a conversation and OpenHands clones your selected repository
+for you. Sometimes you want more control *before* the agent gets involved:
+
+- pre-warm an environment so the agent starts instantly on an expensive setup,
+- check out a specific commit, tag, or a sub-path of a monorepo,
+- clone from a mirror or run custom bootstrapping the default flow doesn't do,
+- reuse one prepared sandbox for several scripted conversations.
+
+The trick is a single field: `POST /api/v1/app-conversations` accepts a
+`sandbox_id`. Pass the id of a sandbox you already prepared and the new
+conversation attaches to it instead of creating a fresh one.
+
+## Point It at Your Own Repo
 
 Every input is a flag with an environment-variable fallback, so the script is
 safe to drop into your own automation unchanged:
@@ -136,3 +140,22 @@ SID=<sandbox_id>
 curl -X DELETE "https://app.all-hands.dev/api/v1/sandboxes/${SID}?sandbox_id=${SID}" \
      -H "X-Session-API-Key: $OH_API_KEY"
 ```
+
+## APIs Used
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/sandboxes` | POST | Start a sandbox (no conversation) |
+| `/api/v1/sandboxes` | GET | Poll until status == RUNNING |
+| `{agent}/api/bash/execute_bash_command` | POST | Run `git clone` and `.openhands/setup.sh` in the sandbox |
+| `/api/v1/app-conversations` | POST | Attach a conversation (`sandbox_id`) |
+| `/api/v1/app-conversations/start-tasks` | GET | Poll for the `app_conversation_id` |
+
+## Related
+
+<!-- docs:cards -->
+
+- [`start-sandbox`](../start-sandbox/) - The bare sandbox lifecycle and the sandbox/agent-server split
+- [Repository Customization](https://docs.all-hands.dev/usage/customization/repository) - Where `.openhands/setup.sh` lives
+
+<!-- /docs:cards -->

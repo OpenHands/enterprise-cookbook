@@ -1,4 +1,4 @@
-# Per-Conversation Secrets via REST API
+# Per-Conversation Secrets
 
 This example demonstrates how to inject per-conversation secrets into an OpenHands
 conversation using only REST APIs (no WebSocket required), and — importantly — how
@@ -418,6 +418,12 @@ curl https://app.all-hands.dev/openapi.json
 curl {agent_server_url}/openapi.json
 ```
 
-## License
+## Related
 
-MIT License — see [LICENSE](../LICENSE) for details.
+<!-- docs:cards -->
+
+- [`service-account-github-pat`](../service-account-github-pat/) - Use OpenHands as a service account with per-user PATs
+- [`gpg-commit-signing`](../gpg-commit-signing/) - Configure GPG signing with SessionStart hooks
+- [OpenHands API Reference](https://app.all-hands.dev/docs) - Full API documentation
+
+<!-- /docs:cards -->
