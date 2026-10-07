@@ -1,4 +1,4 @@
-# Custom Agent With Pip Tool
+# Custom Pip Tool Agent
 
 Load a custom tool from a **published Python package** in OpenHands Cloud. The package
 is installed via `pip install --target /workspace`, making it importable by the frozen
@@ -14,48 +14,7 @@ The example uses **[oh-markdown-tool](https://github.com/jpshackelford/oh-markdo
 markdown editing (renumber sections, manage TOC, etc.). The agent fixes a markdown doc
 with messy numbering and adds a table of contents.
 
-## Prerequisites
-
-```bash
-pip install requests
-export OH_API_KEY=your-openhands-cloud-api-key
-export LLM_API_KEY=your-llm-api-key
-```
-
-Optional overrides (sensible defaults are used otherwise):
-
-```bash
-export LLM_MODEL=litellm_proxy/claude-sonnet-4-5-20250929
-export LLM_BASE_URL=https://llm-proxy.app.all-hands.dev/
-```
-
-## Run it
-
-```bash
-python working_example.py            # runs and cleans up the sandbox
-python working_example.py --keep     # leave the sandbox up for inspection
-```
-
-> **⚠️ Timing note**: If the script runs and deletes the sandbox too quickly, conversation
-> events may not have synced from the agent-server to the main API yet, making the
-> conversation appear empty or incomplete in the Cloud UI. To inspect conversation events
-> in real time, **run with `--keep`** to leave the sandbox alive, or add a delay before
-> cleanup. The script prints the conversation URL — you can view it while the sandbox is
-> still running.
-
-Expected output:
-
-```
-[demo] === Verification ===
-[demo]   registered tools: ['terminal', 'file_editor', 'Markdown Document Tool', 'finish', 'think']
-[demo]   tools used: ['file_editor', 'markdown_document']
-[demo]   PASS: tool 'markdown_document' is registered
-[demo]   PASS: tool 'markdown_document' was invoked by the agent
-[demo]   PASS: file was modified (TOC added, sections renumbered)
-[demo] SUCCESS: the tool was loaded from the pip package and used.
-```
-
-## How it works
+## How It Works
 
 1. **Create a sandbox** (`POST /api/v1/sandboxes`) and wait for `RUNNING`.
 2. **Install the package** into `/workspace` via `pip install --target`:
@@ -87,7 +46,49 @@ Expected output:
    - The tool appears in `ActionEvent` records (used).
    - The file is actually modified (TOC added, sections renumbered 1, 2, 3).
 
-## Why `pip install --target` (and not plain `pip install`)?
+## Prerequisites
+
+```bash
+pip install requests
+export OH_API_KEY=your-openhands-cloud-api-key
+export LLM_API_KEY=your-llm-api-key
+```
+
+Optional overrides (sensible defaults are used otherwise):
+
+```bash
+export LLM_MODEL=litellm_proxy/claude-sonnet-4-5-20250929
+export LLM_BASE_URL=https://llm-proxy.app.all-hands.dev/
+```
+
+## Run It
+
+```bash
+python working_example.py            # runs and cleans up the sandbox
+python working_example.py --keep     # leave the sandbox up for inspection
+```
+
+> [!WARNING]
+> **⚠️ Timing note**: If the script runs and deletes the sandbox too quickly, conversation
+> events may not have synced from the agent-server to the main API yet, making the
+> conversation appear empty or incomplete in the Cloud UI. To inspect conversation events
+> in real time, **run with `--keep`** to leave the sandbox alive, or add a delay before
+> cleanup. The script prints the conversation URL — you can view it while the sandbox is
+> still running.
+
+Expected output:
+
+```text
+[demo] === Verification ===
+[demo]   registered tools: ['terminal', 'file_editor', 'Markdown Document Tool', 'finish', 'think']
+[demo]   tools used: ['file_editor', 'markdown_document']
+[demo]   PASS: tool 'markdown_document' is registered
+[demo]   PASS: tool 'markdown_document' was invoked by the agent
+[demo]   PASS: file was modified (TOC added, sections renumbered)
+[demo] SUCCESS: the tool was loaded from the pip package and used.
+```
+
+## Why `pip install --target` (and Not Plain `pip install`)?
 
 On OpenHands Cloud the agent-server is a **frozen, self-contained binary** (built with
 PyInstaller). A plain `pip install` targets the sandbox's *system* Python interpreter,
@@ -102,14 +103,14 @@ package's own code plus its *non-bundled* dependencies.
 This approach works for any published package, not just `oh-markdown-tool` — the key is
 installing into the working directory and being aware of what's already bundled.
 
-## Verification (same technique as the other examples)
+## Verification (Same Technique as the Other Examples)
 
 Both this example and `custom-agent-with-tool` read the `SystemPromptEvent.tools` array
 to confirm registration, and the `ActionEvent` records to confirm usage. This example
 adds a third check: **did the tool actually do something?** We read the markdown file
 after the run and confirm it was modified (TOC present, sections renumbered).
 
-## The tool: oh-markdown-tool
+## The Tool: `oh-markdown-tool`
 
 `oh-markdown-tool` is a real, published package ([PyPI](https://pypi.org/project/oh-markdown-tool/) |
 [GitHub](https://github.com/jpshackelford/oh-markdown-tool)) that provides structural
@@ -142,6 +143,7 @@ curl -X DELETE "https://app.all-hands.dev/api/v1/sandboxes/<id>?sandbox_id=<id>"
   -H "Authorization: Bearer $OH_API_KEY"
 ```
 
+> [!NOTE]
 > Note: `DELETE /api/v1/sandboxes/{id}` requires `sandbox_id` as **both** the path
 > segment and a query parameter; omitting the query parameter returns HTTP 422 and
 > leaks the sandbox.
