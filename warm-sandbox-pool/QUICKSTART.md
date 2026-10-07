@@ -8,7 +8,7 @@ Get the Warm Sandbox Pool demo running in 5 minutes.
 - **Python 3.10+** - Check with `python --version`
 - **Git** - To clone this repository
 
-## Installation (30 seconds)
+## Installation (about a minute)
 
 ```bash
 # Clone the repository
@@ -22,13 +22,18 @@ pip install -r requirements.txt
 uv pip install -e .
 ```
 
-## Run the Demo (10 seconds)
+## Run the Demo
+
+> **This creates real sandboxes.** The controller starts `POOL_SIZE` (default 3)
+> sandboxes right away and keeps refilling the pool. For a first try use
+> `POOL_SIZE=1 POOL_THRESHOLD=1`. Press Ctrl-C to stop: unused pool sandboxes are
+> deleted, sandboxes already attached to a conversation are left running.
 
 ```bash
 # Set your API key
 export OH_API_KEY=your_api_key_here
 
-# Start the pool controller
+# Start the pool controller (add OH_API_BASE=... for a non-default instance)
 python pool_controller.py
 
 # You should see:
@@ -44,7 +49,7 @@ python pool_controller.py
 
 2. **Watch the pool initialize**:
    - You'll see "Preparing pool..." message
-   - 3 sandboxes will start initializing (takes ~30-60 seconds each)
+   - 3 sandboxes will start initializing (roughly 10-30 seconds each)
    - Watch them progress: 🔴 STARTING → 🟡 PREPARING → 🟢 READY
 
 3. **Start a conversation**:
@@ -57,7 +62,8 @@ python pool_controller.py
 
 4. **Observe the magic**:
    - A ready sandbox is instantly pulled from the pool
-   - OpenHands conversation starts immediately (no wait!)
+   - The conversation attaches to it after a few seconds, with no sandbox boot or
+     Ruby install wait
    - Click the conversation link to see your agent working
    - Watch the pool automatically provision a new sandbox to refill
 
@@ -69,8 +75,8 @@ User clicks "Start" → Wait 30-60s for sandbox → Agent starts
                        ⏳ User sees delay
 
 With Warm Pool:
-User clicks "Start" → Instant sandbox → Agent starts
-                       ⚡ No apparent delay
+User clicks "Start" → Warm sandbox → Agent starts
+                       ⚡ No sandbox boot or install delay
                        (Pool refills in background)
 ```
 
@@ -117,6 +123,7 @@ Customize via environment variables:
 export OH_API_KEY=your_key
 export OH_API_BASE=https://app.all-hands.dev  # or your instance
 export PORT=5000                               # Web UI port
+export HOST=127.0.0.1                          # UI has no auth; keep it local
 
 # Pool sizing
 export POOL_SIZE=3          # How many ready sandboxes to maintain
@@ -124,20 +131,23 @@ export POOL_THRESHOLD=2     # Start refilling when ready count drops below this
 
 # Sandbox config (optional)
 export SANDBOX_SPEC_ID=your_spec_id  # Use custom runtime image
+export INIT_TIMEOUT=300              # Seconds the init script may run
+export MAX_FAILURES=3                # Stop refilling after N failures in a row
 ```
 
 ## Troubleshooting
 
 ### "No ready sandboxes available" error
-- **Wait longer**: Initial pool fill takes 1-3 minutes
+- **Wait longer**: Initial pool fill usually takes under a minute, more if the
+  platform is busy
 - **Check API key**: Make sure `OH_API_KEY` is valid
 - **View logs**: Look at terminal output for error messages
 - **Check web UI**: Look for FAILED sandboxes and error messages
 
 ### Sandboxes stuck in PREPARING
 - **Check init script**: May be timing out or failing
-- **Increase timeout**: Set higher init timeout in code
-- **Test manually**: Use `start-sandbox/` example to debug
+- **Increase timeout**: Set `INIT_TIMEOUT` higher
+- **Test manually**: See "Sandboxes Get Stuck in PREPARING" in `README.md`
 
 ### "OH_API_KEY is required" error
 ```bash
@@ -195,9 +205,10 @@ warm-sandbox-pool/
 ├── pool_controller.py             🎛️  Main backend (Flask + pool logic)
 ├── requirements.txt               📦 Python dependencies
 ├── pyproject.toml                 📦 UV-compatible project config
+├── test_structure.py              ✅ Sanity check of the example's files
 ├── sandbox_prep/
 │   ├── init_ruby_service.sh      🔧 Demo: Ruby/Sinatra init
-│   └── quote_service.rb          💎 Demo Ruby service
+│   └── quote_service.rb          💎 Demo Ruby service (uploaded to each sandbox)
 ├── static/
 │   ├── app.js                    🎨 Frontend JavaScript
 │   └── styles.css                🎨 UI styling
@@ -208,7 +219,6 @@ warm-sandbox-pool/
 ## Getting Help
 
 - **Documentation**: Read `README.md` for full details
-- **Example Code**: All files are heavily commented
 - **Related Examples**: Check `../start-sandbox/` and `../clone-and-attach/`
 
 ## Success Criteria
@@ -221,6 +231,6 @@ You've successfully run the demo when:
 ✅ The agent can interact with the pre-installed quote service\
 ✅ Pool automatically provisions a replacement sandbox
 
-**Total time from zero to working demo: ~5 minutes**
+**Total time from zero to working demo: a few minutes**
 
 Now you understand how warm sandbox pools work and can adapt this technique for your own application deployment!

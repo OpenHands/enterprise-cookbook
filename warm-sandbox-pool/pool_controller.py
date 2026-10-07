@@ -11,6 +11,9 @@ Usage:
     python pool_controller.py
 
 Then open http://localhost:5000 in your browser.
+
+On exit (Ctrl-C / SIGTERM) every sandbox that is still in the pool is deleted.
+Sandboxes already handed to a conversation are left alone.
 """
 
 import argparse
@@ -18,6 +21,7 @@ import json
 import logging
 import os
 import queue
+import signal
 import sys
 import threading
 import time
@@ -28,7 +32,6 @@ from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, render_template, request
-from flask_cors import CORS
 
 
 # Configure logging
@@ -91,32 +94,42 @@ class PoolController:
         pool_size: int = 3,
         threshold: int = 2,
         sandbox_spec_id: str | None = None,
+        init_timeout: int = 300,
+        max_failures: int = 3,
     ):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.pool_size = pool_size
         self.threshold = threshold
         self.sandbox_spec_id = sandbox_spec_id
+        self.init_timeout = init_timeout
+        self.max_failures = max_failures
 
         self.headers = {"X-Session-API-Key": api_key}
         self.ready_queue: queue.Queue[PooledSandbox] = queue.Queue()
         self.all_sandboxes: dict[str, PooledSandbox] = {}
         self.lock = threading.RLock()
         self.running = True
+        self.consecutive_failures = 0
 
-        # Load initialization script
-        self.init_script = self._load_init_script()
+        prep_dir = Path(__file__).parent / "sandbox_prep"
+        self.init_script = self._load_file(prep_dir / "init_ruby_service.sh")
+        self.service_source = self._load_file(prep_dir / "quote_service.rb")
 
         logger.info(
             f"Pool controller initialized: size={pool_size}, threshold={threshold}"
         )
 
-    def _load_init_script(self) -> str:
-        """Load the sandbox initialization script."""
-        script_path = Path(__file__).parent / "sandbox_prep" / "init_ruby_service.sh"
-        if not script_path.exists():
-            raise FileNotFoundError(f"Init script not found: {script_path}")
-        return script_path.read_text()
+    @staticmethod
+    def _load_file(path: Path) -> str:
+        if not path.exists():
+            raise FileNotFoundError(f"Sandbox prep file not found: {path}")
+        return path.read_text()
+
+    @property
+    def halted(self) -> bool:
+        """True once provisioning has failed too many times in a row."""
+        return self.consecutive_failures >= self.max_failures
 
     def start(self) -> None:
         """Start the pool management background thread."""
@@ -134,6 +147,8 @@ class PoolController:
         # Maintenance loop
         while self.running:
             time.sleep(5)
+            if self.halted:
+                continue
             ready_count = self.ready_queue.qsize()
             if ready_count < self.threshold:
                 needed = self.pool_size - self._total_initializing_count() - ready_count
@@ -194,9 +209,16 @@ class PoolController:
             self._run_init_script(sandbox)
 
             # 4. Mark as ready and add to queue
-            sandbox.state = SandboxState.READY
-            sandbox.ready_at = datetime.now()
-            self.ready_queue.put(sandbox)
+            with self.lock:
+                accepted = self.running
+                if accepted:
+                    sandbox.state = SandboxState.READY
+                    sandbox.ready_at = datetime.now()
+                    self.ready_queue.put(sandbox)
+                    self.consecutive_failures = 0
+            if not accepted:
+                self._delete_sandbox(sandbox_id)
+                return
             logger.info(
                 f"Sandbox {sandbox_id}: READY "
                 f"(took {(sandbox.ready_at - sandbox.created_at).seconds}s)"
@@ -204,9 +226,31 @@ class PoolController:
 
         except Exception as e:
             logger.error(f"Failed to provision sandbox: {e}", exc_info=True)
+            with self.lock:
+                self.consecutive_failures += 1
             if sandbox:
                 sandbox.state = SandboxState.FAILED
                 sandbox.error_message = str(e)
+                self._delete_sandbox(sandbox.id)
+            if self.halted:
+                logger.error(
+                    f"{self.consecutive_failures} provisioning failures in a row: "
+                    "refilling is halted. Fix the cause and restart the controller."
+                )
+
+    def _delete_sandbox(self, sandbox_id: str) -> None:
+        """Best-effort delete so failed or unused sandboxes don't leak."""
+        try:
+            resp = requests.delete(
+                f"{self.base_url}/api/v1/sandboxes/{sandbox_id}",
+                headers=self.headers,
+                params={"sandbox_id": sandbox_id},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            logger.info(f"Sandbox {sandbox_id}: deleted")
+        except Exception as e:
+            logger.warning(f"Could not delete sandbox {sandbox_id}: {e}")
 
     def _wait_until_running(
         self, sandbox: PooledSandbox, timeout: int = 180
@@ -264,30 +308,29 @@ class PoolController:
 
         session_headers = {"X-Session-API-Key": sandbox.session_api_key}
 
-        # Upload the init script
-        sandbox.init_log.append("Uploading init script...")
-        upload_resp = requests.post(
-            f"{sandbox.agent_url}/api/upload-files",
-            headers=session_headers,
-            files={"file": ("init.sh", self.init_script, "text/plain")},
-            data={"destination": "/tmp/init.sh"},
-            timeout=30,
-        )
-        upload_resp.raise_for_status()
+        sandbox.init_log.append("Uploading init script and service...")
+        for name, content in (
+            ("init.sh", self.init_script),
+            ("quote_service.rb", self.service_source),
+        ):
+            upload_resp = requests.post(
+                f"{sandbox.agent_url}/api/file/upload",
+                headers=session_headers,
+                params={"path": f"/tmp/{name}"},
+                files={"file": (name, content, "text/plain")},
+                timeout=30,
+            )
+            upload_resp.raise_for_status()
 
-        # Execute the script
         sandbox.init_log.append("Executing init script...")
         exec_resp = requests.post(
             f"{sandbox.agent_url}/api/bash/execute_bash_command",
             headers=session_headers,
             json={
-                "command": (
-                    "chmod +x /tmp/init.sh && "
-                    f"SANDBOX_ID={sandbox.id} bash /tmp/init.sh"
-                ),
-                "timeout": 300,
+                "command": f"SANDBOX_ID={sandbox.id} bash /tmp/init.sh",
+                "timeout": self.init_timeout,
             },
-            timeout=320,
+            timeout=self.init_timeout + 20,
         )
         exec_resp.raise_for_status()
         result = exec_resp.json()
@@ -325,11 +368,17 @@ class PoolController:
                 [sb.to_dict() for sb in self.all_sandboxes.values()],
                 key=lambda x: x["created_at"],
             )
+        for sb in sandboxes_list:
+            if sb["conversation_id"]:
+                sb["conversation_url"] = (
+                    f"{self.base_url}/conversations/{sb['conversation_id']}"
+                )
 
         return {
             "pool_size": self.pool_size,
             "threshold": self.threshold,
             "ready_count": self.ready_queue.qsize(),
+            "halted": self.halted,
             "sandboxes": sandboxes_list,
             "timestamp": datetime.now().isoformat(),
         }
@@ -381,14 +430,23 @@ class PoolController:
         return conv_id
 
     def shutdown(self) -> None:
-        """Graceful shutdown."""
-        self.running = False
-        logger.info("Pool controller shutting down")
+        """Stop refilling and delete every sandbox not handed to a conversation."""
+        with self.lock:
+            self.running = False
+            leftovers = [
+                sb.id
+                for sb in self.all_sandboxes.values()
+                if sb.state not in (SandboxState.ALLOCATED, SandboxState.FAILED)
+            ]
+        logger.info(
+            f"Pool controller shutting down, deleting {len(leftovers)} sandbox(es)"
+        )
+        for sandbox_id in leftovers:
+            self._delete_sandbox(sandbox_id)
 
 
 # Flask Application
 app = Flask(__name__)
-CORS(app)
 
 pool_controller: PoolController | None = None
 
@@ -495,6 +553,25 @@ def parse_args():
         default=int(os.environ.get("PORT", "5000")),
         help="Web server port (env: PORT, default: 5000)",
     )
+    p.add_argument(
+        "--host",
+        default=os.environ.get("HOST", "127.0.0.1"),
+        help="Web server bind address (env: HOST, default: 127.0.0.1). "
+        "The UI has no authentication; only widen this on a trusted network.",
+    )
+    p.add_argument(
+        "--init-timeout",
+        type=int,
+        default=int(os.environ.get("INIT_TIMEOUT", "300")),
+        help="Seconds the init script may run (env: INIT_TIMEOUT, default: 300)",
+    )
+    p.add_argument(
+        "--max-failures",
+        type=int,
+        default=int(os.environ.get("MAX_FAILURES", "3")),
+        help="Stop refilling after this many consecutive provisioning failures "
+        "(env: MAX_FAILURES, default: 3)",
+    )
     return p.parse_args()
 
 
@@ -514,13 +591,19 @@ def main():
         pool_size=args.pool_size,
         threshold=args.threshold,
         sandbox_spec_id=args.sandbox_spec_id,
+        init_timeout=args.init_timeout,
+        max_failures=args.max_failures,
     )
     pool_controller.start()
 
-    # Start Flask app
-    logger.info(f"Starting web server on port {args.port}")
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
+    logger.info(f"Starting web server on {args.host}:{args.port}")
     logger.info(f"Open http://localhost:{args.port} in your browser")
-    app.run(host="0.0.0.0", port=args.port, debug=False, threaded=True)
+    try:
+        app.run(host=args.host, port=args.port, debug=False, threaded=True)
+    finally:
+        pool_controller.shutdown()
 
 
 if __name__ == "__main__":

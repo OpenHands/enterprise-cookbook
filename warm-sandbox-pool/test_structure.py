@@ -4,6 +4,7 @@ Simple test to verify the warm-sandbox-pool structure is complete.
 Run this before deploying to catch any missing files.
 """
 
+import subprocess
 from pathlib import Path
 
 
@@ -71,8 +72,27 @@ def check_structure():
     else:
         print("⚠️  Init script missing #!/bin/bash shebang")
 
+    syntax_ok = True
+    bash_check = subprocess.run(
+        ["bash", "-n", str(base / "sandbox_prep" / "init_ruby_service.sh")],
+        capture_output=True,
+        text=True,
+    )
+    if bash_check.returncode == 0:
+        print("✅ Init script passes bash -n")
+    else:
+        syntax_ok = False
+        print(f"❌ Init script syntax error:\n{bash_check.stderr}")
+
+    try:
+        compile((base / "pool_controller.py").read_text(), "pool_controller.py", "exec")
+        print("✅ pool_controller.py compiles")
+    except SyntaxError as e:
+        syntax_ok = False
+        print(f"❌ pool_controller.py syntax error: {e}")
+
     print("\n📊 Structure check complete!")
-    return len(missing) == 0
+    return len(missing) == 0 and syntax_ok
 
 
 if __name__ == "__main__":

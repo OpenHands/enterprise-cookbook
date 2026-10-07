@@ -92,9 +92,18 @@ python pool_controller.py
 
 Then open http://localhost:5000 in your browser.
 
+> **Heads up: this creates real sandboxes.** The controller immediately starts
+> `POOL_SIZE` sandboxes (default 3) and keeps topping the pool up as you use them.
+> Try it with `POOL_SIZE=1 POOL_THRESHOLD=1` first. Press Ctrl-C (or send SIGTERM)
+> to stop: every sandbox still sitting in the pool is deleted. Sandboxes already
+> attached to a conversation are left running, like any other conversation sandbox.
+> If the controller is killed with SIGKILL it cannot clean up, so check your sandbox
+> list afterwards.
+
 ### What You'll See
 
-1. **Initial State**: "Preparing pool..." message while 3 sandboxes initialize
+1. **Initial State**: "Preparing pool..." message while the sandboxes initialize
+   (roughly 10-30 seconds each when the platform has capacity, longer otherwise)
 2. **Pool Visualization**: Real-time status of each sandbox:
    - 🔴 **STARTING**: OpenHands is provisioning the sandbox
    - 🟡 **PREPARING**: Installing Ruby, gems, starting service
@@ -108,21 +117,26 @@ Then open http://localhost:5000 in your browser.
 Environment variables:
 
 - `OH_API_KEY`: OpenHands Cloud API key (required)
-- `OH_API_BASE`: API base URL (default: `https://app.all-hands.dev`)
+- `OH_API_BASE`: API base URL (default: `https://app.all-hands.dev`). Set this to
+  point at a different OpenHands instance.
 - `POOL_SIZE`: Target pool size (default: `3`)
 - `POOL_THRESHOLD`: Trigger refill when pool drops below this (default: `2`)
+- `SANDBOX_SPEC_ID`: Optional sandbox spec (runtime image) to use for pool sandboxes
+- `INIT_TIMEOUT`: Seconds the init script may run in a sandbox (default: `300`)
+- `MAX_FAILURES`: Stop refilling after this many provisioning failures in a row
+  (default: `3`). A failed sandbox is deleted immediately, so a broken init script
+  cannot silently create sandboxes forever.
+- `HOST`: Address the web UI binds to (default: `127.0.0.1`). The UI has no
+  authentication and can start conversations with your API key, so only widen this
+  on a trusted network.
 - `PORT`: Web server port (default: `5000`)
 
 ### Testing the Ruby Service
 
-Once a sandbox is in READY state, the Sinatra service is running on port 4567. You can test it:
+Once a sandbox is in READY state, the Sinatra service is listening on port 4567
+**inside** the sandbox. That port is not exposed publicly, so reach it from the
+sandbox itself. The easiest way is to start a conversation and ask the agent:
 
-```bash
-# Get the sandbox ID from the web UI, then:
-curl https://work-1-<sandbox-slug>.prod-runtime.all-hands.dev:12000/quote
-```
-
-Or ask the agent to interact with it:
 ```
 "Call the quote service running on localhost:4567 and show me today's quote"
 ```
@@ -131,12 +145,15 @@ Or ask the agent to interact with it:
 
 ### Sandbox Initialization Process
 
-Each sandbox goes through these preparation steps (see `sandbox_prep/init_ruby_service.sh`):
+The controller uploads `sandbox_prep/init_ruby_service.sh` and
+`sandbox_prep/quote_service.rb` to the sandbox's agent-server (`POST /api/file/upload`)
+and runs the script (`POST /api/bash/execute_bash_command`). The script does the
+following (sandboxes run as a non-root user, so it uses `sudo` for installs):
 
-1. **Install Ruby**: Uses rbenv to install Ruby 3.2
-2. **Install Sinatra**: Gem install sinatra
-3. **Deploy Service**: Copies the quote service code
-4. **Start Service**: Launches the Sinatra app in the background
+1. **Install Ruby**: `apt-get install ruby-full` (Ruby 3.3 on current sandbox images)
+2. **Install Sinatra**: `gem install sinatra rackup puma`
+3. **Deploy Service**: Copies the uploaded `quote_service.rb` into `/workspace/services`
+4. **Start Service**: Launches the Sinatra app in the background on port 4567
 5. **Verify**: Confirms the service responds to health checks
 
 This simulates a realistic scenario where your agent needs specific tools/services pre-installed.
@@ -149,7 +166,10 @@ The `PoolController` class handles:
 - **Monitoring**: Polls sandbox status until RUNNING
 - **Initialization**: Executes preparation scripts via agent-server API
 - **Queue Management**: Thread-safe queue of ready sandboxes
-- **Auto-Refill**: Background thread maintains pool size
+- **Auto-Refill**: Background thread maintains pool size, and stops after
+  `MAX_FAILURES` consecutive failures
+- **Cleanup**: Deletes failed sandboxes immediately and all unused pool sandboxes
+  on shutdown
 - **Conversation Binding**: Attaches conversations to pre-warmed sandboxes
 
 ### Real-Time Updates
@@ -161,11 +181,14 @@ The web UI uses Server-Sent Events (SSE) to stream pool state updates in real-ti
 ```
 warm-sandbox-pool/
 ├── README.md                          # This file
+├── QUICKSTART.md                      # Short run-it-now guide
 ├── pool_controller.py                 # Flask backend + pool manager
 ├── requirements.txt                   # Python dependencies
+├── pyproject.toml                     # Same dependencies, for uv
+├── test_structure.py                  # Sanity check of the example's files
 ├── sandbox_prep/
 │   ├── init_ruby_service.sh          # Bash script to initialize each sandbox
-│   └── quote_service.rb              # Ruby/Sinatra demo service
+│   └── quote_service.rb              # Ruby/Sinatra demo service (uploaded to each sandbox)
 ├── static/
 │   ├── app.js                        # Frontend JavaScript
 │   └── styles.css                    # UI styling
@@ -180,10 +203,9 @@ warm-sandbox-pool/
 Pre-install language runtimes (Ruby, Java, Go) that take time to set up:
 
 ```bash
-# In init script
-rbenv install 3.2.0
-rbenv global 3.2.0
-gem install rails bundler
+# In init script (sandboxes run as a non-root user; use sudo for system installs)
+sudo apt-get install -y ruby-full
+sudo gem install rails bundler
 ```
 
 ### 2. Service Dependencies
@@ -217,11 +239,10 @@ Replace the demo Sinatra service with your actual application initialization:
 ```bash
 # In init script (replace sandbox_prep/init_ruby_service.sh contents)
 # Install Ruby (or use a runtime that already has it)
-rbenv install 3.2.0
-rbenv global 3.2.0
+sudo apt-get install -y ruby-full
 
 # Install your application gems
-gem install your_gem_name
+sudo gem install your_gem_name
 
 # Initialize your application
 cd /workspace
@@ -264,8 +285,8 @@ Edit `sandbox_prep/init_ruby_service.sh` to install additional tools:
 
 ```bash
 # Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt-get install -y nodejs
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
 # Install Python packages
 pip install pandas numpy jupyter
@@ -277,11 +298,9 @@ Replace `sandbox_prep/quote_service.rb` with your own Ruby application or gem.
 
 ### Adjust Pool Parameters
 
-```python
-# In pool_controller.py
-POOL_SIZE = 5              # Maintain 5 ready sandboxes
-POOL_THRESHOLD = 3         # Refill when below 3
-INIT_TIMEOUT = 600         # Allow 10 minutes for initialization
+```bash
+POOL_SIZE=5 POOL_THRESHOLD=3 INIT_TIMEOUT=600 python pool_controller.py
+# Maintain 5 ready sandboxes, refill when below 3, allow 10 minutes for init
 ```
 
 ### Add Health Checks
@@ -300,21 +319,34 @@ done
 
 ### Pool Never Reaches Ready State
 
-Check the initialization logs in the web UI. Common issues:
+Check the controller's terminal output and the init log in the web UI. After
+`MAX_FAILURES` failures in a row the controller stops creating sandboxes and the UI
+says so. Common issues:
 - Ruby installation timeout (increase `INIT_TIMEOUT`)
 - Network issues downloading gems
 - Insufficient sandbox resources
 
 ### Sandboxes Get Stuck in PREPARING
 
-Look at the agent-server command output. The init script may be failing. Test it manually:
+Failed sandboxes are deleted right away, so to debug the init script keep a
+sandbox alive and run it by hand. Create one with the `start-sandbox/` example (or
+`POST /api/v1/sandboxes`), then read its `session_api_key` and `AGENT_SERVER` URL
+from `GET /api/v1/sandboxes?id=<sandbox-id>`:
 
 ```bash
-# Get a sandbox URL from the UI, then:
-curl -X POST https://<agent-server-url>/api/bash/execute_bash_command \
-  -H "X-Session-API-Key: <session-key>" \
-  -d '{"command": "bash /workspace/init_ruby_service.sh", "timeout": 300}'
+AGENT=https://<agent-server-url>
+KEY=<session-api-key>
+
+curl -X POST "$AGENT/api/file/upload?path=/tmp/init.sh" \
+  -H "X-Session-API-Key: $KEY" -F file=@sandbox_prep/init_ruby_service.sh
+curl -X POST "$AGENT/api/file/upload?path=/tmp/quote_service.rb" \
+  -H "X-Session-API-Key: $KEY" -F file=@sandbox_prep/quote_service.rb
+curl -X POST "$AGENT/api/bash/execute_bash_command" \
+  -H "X-Session-API-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"command": "bash /tmp/init.sh", "timeout": 300}'
 ```
+
+Delete the sandbox when you are done (`DELETE /api/v1/sandboxes/<id>?sandbox_id=<id>`).
 
 ### High Resource Usage
 

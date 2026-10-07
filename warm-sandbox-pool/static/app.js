@@ -41,6 +41,9 @@ class PoolUI {
         // Update sandbox list
         this.renderSandboxes(poolStatus.sandboxes);
 
+        document.getElementById('halted-notice').style.display =
+            poolStatus.halted ? 'block' : 'none';
+
         // Check if pool is ready
         const wasReady = this.poolReady;
         this.poolReady = poolStatus.ready_count > 0;
@@ -73,8 +76,8 @@ class PoolUI {
             ? this.renderLogs(sandbox.init_log)
             : '';
 
-        const conversationLink = sandbox.conversation_id
-            ? `<a href="/conversations/${sandbox.conversation_id}" target="_blank" class="conversation-link">
+        const conversationLink = sandbox.conversation_url
+            ? `<a href="${this.escapeHtml(sandbox.conversation_url)}" target="_blank" class="conversation-link">
                    🔗 View Conversation
                </a>`
             : '';

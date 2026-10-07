@@ -68,7 +68,11 @@
                 <div id="waiting-state" class="waiting-state">
                     <div class="spinner"></div>
                     <p>Preparing sandbox pool...</p>
-                    <p class="waiting-subtext">This takes about 30-60 seconds on first start</p>
+                    <p class="waiting-subtext">This usually takes under a minute on first start</p>
+                    <p id="halted-notice" class="error-message" style="display: none;">
+                        ❌ Provisioning failed repeatedly, so refilling has stopped. See the
+                        controller's terminal output, fix the cause, and restart it.
+                    </p>
                 </div>
 
                 <div id="ready-state" class="ready-state" style="display: none;">
