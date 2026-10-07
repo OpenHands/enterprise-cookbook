@@ -157,7 +157,7 @@ turns pays its full-body cost ~5% as often as the static block does.
 ### 1. Start the conversation
 
 `POST /api/v1/app-conversations` is asynchronous: it returns a
-[`AppConversationStartTask`](https://docs.all-hands.dev/) whose `id` is the
+[`AppConversationStartTask`](https://docs.openhands.dev/) whose `id` is the
 **task id**, not the conversation id. Omit `sandbox_id` and the App Server
 provisions a fresh sandbox for you.
 
