@@ -1,4 +1,4 @@
-# Detect a conversation's terminal state over the WebSocket (deep dive)
+# Watch Terminal State
 
 A follow-on to [`react-to-state-websocket`](../react-to-state-websocket/). That
 example covers the basics — start a Cloud sandbox, **attach** a conversation (no
@@ -23,14 +23,14 @@ One file:
   attach a conversation, watch the socket, and report the **confirmed** terminal
   state.
 
-## Prerequisite
+## Prerequisites
 
 Start with [`react-to-state-websocket`](../react-to-state-websocket/) for the
 Cloud sandbox lifecycle (create → attach → start-task poll → delete) and the
 socket subscription. Everything here builds directly on that; the sandbox and
 attach code is intentionally identical so you can focus on the new parts.
 
-## What this adds
+## What This Adds
 
 ### 1. Both `ConversationStateUpdateEvent` shapes
 
@@ -71,22 +71,7 @@ frame**, so the key never appears in the URL — and therefore never lands in
 reverse-proxy or load-balancer access logs. (`resend_mode=all` stays in the
 query string; it is not a secret.)
 
-## APIs used
-
-Same as [`react-to-state-websocket`](../react-to-state-websocket/):
-
-- **Cloud app server** (`https://app.all-hands.dev`, `X-Session-API-Key: <OH_API_KEY>`):
-  - `POST /api/v1/sandboxes` — start a sandbox
-  - `GET  /api/v1/sandboxes?id=<id>` — poll until `RUNNING`
-  - `POST /api/v1/app-conversations` — attach a conversation (returns a start task)
-  - `GET  /api/v1/app-conversations/start-tasks?ids=<id>` — poll for the id
-  - `DELETE /api/v1/sandboxes/{id}?sandbox_id=<id>` — clean up
-- **Agent server** (the sandbox's `AGENT_SERVER` exposed URL, `session_api_key`):
-  - `GET /sockets/events/{conversation_id}` — the **WebSocket** event stream
-    (`wss://…`), first-frame auth, `?resend_mode=all` to replay events emitted
-    before the socket connected.
-
-## Run it
+## Run It
 
 ```bash
 export OH_API_KEY=...        # your https://app.all-hands.dev API key
@@ -110,9 +95,9 @@ account's configured LLM.
 | `--watch-timeout` | — | `180` (socket watch) |
 | `--keep` | — | off (deletes the sandbox at the end) |
 
-## What it prints
+## What It Prints
 
-```
+```text
 sandbox: 5GcGcTMU1BSlCWzQBl7hhk
   sandbox status: STARTING
   sandbox status: RUNNING
@@ -156,7 +141,7 @@ Cleaning up sandbox…
   `react-to-state-websocket` does) and stopping on the first `finished` is
   shorter — just slightly less precise if a Stop hook is in play.
 
-## Running locally without Cloud
+## Running Locally Without Cloud
 
 The audience for this example is **Cloud**. If you have no Cloud account, the
 identical socket also runs against an agent-server you start yourself in Docker —
@@ -167,12 +152,27 @@ point `ws://localhost:<port>/sockets/events/{id}` at it and pass the
 The event handling in `watch_terminal_state.py` is unchanged; only how you obtain
 the agent-server URL + session key differs.
 
+## APIs Used
+
+Same as [`react-to-state-websocket`](../react-to-state-websocket/):
+
+- **Cloud app server** (`https://app.all-hands.dev`, `X-Session-API-Key: <OH_API_KEY>`):
+  - `POST /api/v1/sandboxes` — start a sandbox
+  - `GET  /api/v1/sandboxes?id=<id>` — poll until `RUNNING`
+  - `POST /api/v1/app-conversations` — attach a conversation (returns a start task)
+  - `GET  /api/v1/app-conversations/start-tasks?ids=<id>` — poll for the id
+  - `DELETE /api/v1/sandboxes/{id}?sandbox_id=<id>` — clean up
+- **Agent server** (the sandbox's `AGENT_SERVER` exposed URL, `session_api_key`):
+  - `GET /sockets/events/{conversation_id}` — the **WebSocket** event stream
+    (`wss://…`), first-frame auth, `?resend_mode=all` to replay events emitted
+    before the socket connected.
+
 ## Related
 
-- [`react-to-state-websocket`](../react-to-state-websocket/) — **start here**:
-  the basics of subscribing to the socket and reacting to every transition, with
-  two ways to create the conversation (Cloud-attach vs. agent-direct)
-- [`server-info-idle`](../server-info-idle/) — the coarse pull alternative: poll
-  `/server_info.idle_time` for "the workspace has gone quiet"
-- [`finish-callback`](../finish-callback/) — a Stop-hook callback on `FINISHED`
-  (why per-field `finished` is advisory)
+<!-- docs:cards -->
+
+- [`react-to-state-websocket`](../react-to-state-websocket/) - **start here**: the basics of subscribing to the socket and reacting to every transition, with two ways to create the conversation (Cloud-attach vs. agent-direct)
+- [`server-info-idle`](../server-info-idle/) - the coarse pull alternative: poll `/server_info.idle_time` for "the workspace has gone quiet"
+- [`finish-callback`](../finish-callback/) - a Stop-hook callback on `FINISHED` (why per-field `finished` is advisory)
+
+<!-- /docs:cards -->

@@ -1,0 +1,5 @@
+---
+title: React to State WebSocket
+description: React to conversation execution_status changes over WebSocket instead of polling.
+category: Conversation monitoring & reacting
+icon: bolt

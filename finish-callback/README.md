@@ -1,4 +1,4 @@
-# Finish Callback with a Stop Hook
+# Finish Callback
 
 A self-contained example showing how to **notify an external URL the moment a
 conversation finishes**, using a **Stop hook** — instead of finding out only by
@@ -8,8 +8,9 @@ control, optionally attaching a payload file's contents.
 This is the "push instead of poll" pattern: keep your existing polling loop as a
 safety net, but let the callback wake you up immediately in the common case.
 
-[![Load Finish Callback](https://img.shields.io/badge/Load%20Finish%20Callback-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJmaW5pc2gtY2FsbGJhY2svb2gtZmluaXNoLWNhbGxiYWNrIn1d&message=Say%20hello%20and%20then%20finish.)
+[![Load Finish Callback](https://img.shields.io/badge/Load%20Finish%20Callback-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAiZmluaXNoLWNhbGxiYWNrL29oLWZpbmlzaC1jYWxsYmFjayJ9XQ%3D%3D&message=Say%20hello%20and%20then%20finish.)
 
+> [!NOTE]
 > **About the badge:** clicking it loads the plugin into a fresh conversation,
 > but the `/launch` route only carries `plugins` + `message` — **not secrets**.
 > Without `OH_CALLBACK_URL` the hook is a deliberate no-op, so the badge is a
@@ -17,6 +18,7 @@ safety net, but let the callback wake you up immediately in the common case.
 > secrets, which means the API path below (`load_finish_callback.py`) or your own
 > call to `POST /api/v1/app-conversations` with a `secrets` field.
 
+> [!IMPORTANT]
 > **No customer information lives in this plugin.** The callback URL, an optional
 > shared-secret token, and an optional payload file path all come from
 > **conversation secrets** at start time. The repo ships only a local test
@@ -24,7 +26,7 @@ safety net, but let the callback wake you up immediately in the common case.
 
 ## What's in the Box
 
-```
+```text
 finish-callback/
 ├── callback_receiver.py          # tiny stdlib web server (the demo receiver)
 ├── load_finish_callback.py       # turnkey: start a conversation + pass the secrets
@@ -42,17 +44,14 @@ finish-callback/
 
 ## How It Works
 
-```
-Agent finishes its work → conversation reaches FINISHED
-  ↓
-Stop hook fires (before the stop is finalized)
-  ├─ reads OH_CALLBACK_URL / OH_CALLBACK_TOKEN / OH_CALLBACK_PAYLOAD from env
-  ├─ builds the body: your payload file, or a small default JSON envelope
-  └─ POSTs to your URL (async, best-effort, short timeout)
-  ↓
-Agent stops normally (the hook always exits 0 — it never blocks)
-  ↓
-Your receiver gets the POST and reacts immediately
+```mermaid
+flowchart TD
+    A["Agent finishes its work → conversation reaches FINISHED"] --> B["Stop hook fires (before the stop is finalized)"]
+    B --> B1["reads OH_CALLBACK_URL / OH_CALLBACK_TOKEN / OH_CALLBACK_PAYLOAD from env"]
+    B1 --> B2["builds the body: your payload file, or a small default JSON envelope"]
+    B2 --> B3["POSTs to your URL (async, best-effort, short timeout)"]
+    B3 --> C["Agent stops normally (the hook always exits 0 — it never blocks)"]
+    C --> D["Your receiver gets the POST and reacts immediately"]
 ```
 
 ## Configuration
@@ -71,7 +70,7 @@ Default body when no payload file is given:
 {"status": "finished", "session_id": "<session>", "finished_at": "<UTC ISO-8601>"}
 ```
 
-## Try It End-to-End
+## Run It
 
 You need two things reachable from the sandbox: a **running receiver** and a
 **public URL** that forwards to it. The receiver is stdlib-only; the loader
@@ -139,10 +138,11 @@ python load_plugin.py \
   --secret OH_CALLBACK_TOKEN="s3cr3t"
 ```
 
+> [!IMPORTANT]
 > **Heads-up:** the callback fires on **every** transition to `FINISHED` — so it
 > also covers follow-up messages you send later, not just the first run.
 
-## Verify the Hook Locally (no sandbox needed)
+## Verify the Hook Locally (No Sandbox Needed)
 
 You can exercise the exact hook script against a local receiver in one shell:
 
@@ -194,27 +194,32 @@ The magic is in [`hooks/hooks.json`](./oh-finish-callback/hooks/hooks.json):
 The script reads its config from the environment, builds the body, and `curl`s
 your URL with a short timeout, swallowing errors.
 
-> **Why inline (not a reference to the bundled `on_stop.sh`)?** When hooks run as
-> a **plugin**, they execute with the working directory set to the agent's
-> workspace (not the plugin directory), and there is no plugin-root path
-> variable — so a relative path like `hooks/on_stop.sh` won't resolve.
-> [`on_stop.sh`](./oh-finish-callback/hooks/on_stop.sh) is kept as the readable,
-> locally-testable **source of truth**; the identical script is embedded inline
-> in `hooks.json`, which is the copy that actually runs. If you edit the script,
-> re-embed it:
->
-> ```bash
-> python - <<'PY'
-> import json
-> s = open("oh-finish-callback/hooks/on_stop.sh").read()
-> cfg = {"hooks": {"Stop": [{"matcher": "*", "hooks": [
->     {"type": "command", "command": s, "timeout": 15, "async": True}]}]}}
-> json.dump(cfg, open("oh-finish-callback/hooks/hooks.json", "w"), indent=2)
-> open("oh-finish-callback/hooks/hooks.json", "a").write("\n")
-> PY
-> ```
+<details>
+<summary>Why inline?</summary>
 
-## Reliability: callback + polling
+**Why inline (not a reference to the bundled `on_stop.sh`)?** When hooks run as
+a **plugin**, they execute with the working directory set to the agent's
+workspace (not the plugin directory), and there is no plugin-root path
+variable — so a relative path like `hooks/on_stop.sh` won't resolve.
+[`on_stop.sh`](./oh-finish-callback/hooks/on_stop.sh) is kept as the readable,
+locally-testable **source of truth**; the identical script is embedded inline
+in `hooks.json`, which is the copy that actually runs. If you edit the script,
+re-embed it:
+
+```bash
+python - <<'PY'
+import json
+s = open("oh-finish-callback/hooks/on_stop.sh").read()
+cfg = {"hooks": {"Stop": [{"matcher": "*", "hooks": [
+    {"type": "command", "command": s, "timeout": 15, "async": True}]}]}}
+json.dump(cfg, open("oh-finish-callback/hooks/hooks.json", "w"), indent=2)
+open("oh-finish-callback/hooks/hooks.json", "a").write("\n")
+PY
+```
+
+</details>
+
+## Reliability: Callback + Polling
 
 The callback is a **latency optimization, not a delivery guarantee**. It won't
 fire if:
@@ -240,18 +245,22 @@ Hooks can intercept different lifecycle events:
 | SessionStart | When a conversation starts | ❌ No | Setup, logging |
 | SessionEnd | When a conversation ends | ❌ No | Cleanup |
 
-## Related
-
-- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks.md) — full hook documentation
-- [Plugin System](https://docs.openhands.dev/sdk/guides/plugins.md) — how plugins work
-- [`load-plugin`](../load-plugin/) — load this plugin (and pass secrets) via the REST API
-- [`command-blacklist`](../command-blacklist/) — the PreToolUse example this one is modeled on
-- [`launch-plugin-badge`](../launch-plugin-badge/) — turn a plugin into a no-code launch link
-- [`conversation-tags`](../conversation-tags/) — attach metadata (like an external URL) to a conversation
-
 ## Real-World Use Cases
 
 - **Windmill / workflow engines** — get pinged when a run finishes instead of polling every few seconds
 - **CI pipelines** — kick off the next stage the moment the agent is done
 - **Dashboards / queues** — mark a job complete in real time
 - **Chat notifications** — post "run finished" to Slack/Teams from your own backend
+
+## Related
+
+<!-- docs:cards -->
+
+- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks) - full hook documentation
+- [Plugin System](https://docs.openhands.dev/sdk/guides/plugins) - how plugins work
+- [`load-plugin`](../load-plugin/) - load this plugin (and pass secrets) via the REST API
+- [`command-blacklist`](../command-blacklist/) - the PreToolUse example this one is modeled on
+- [`launch-plugin-badge`](../launch-plugin-badge/) - turn a plugin into a no-code launch link
+- [`conversation-tags`](../conversation-tags/) - attach metadata (like an external URL) to a conversation
+
+<!-- /docs:cards -->
