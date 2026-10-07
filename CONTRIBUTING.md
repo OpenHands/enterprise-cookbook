@@ -100,9 +100,12 @@ a review from `openhands-agent`.
 
 On every push to `main`, nightly, and on demand, the **Docs publish** workflow
 renders all published examples and keeps a single pull request in OpenHands/docs
-up to date on the `cookbook-sync` branch. A maintainer of the docs repository
-merges it to put the changes live. Until then, several merged changes accumulate
-in that one pull request.
+up to date on the `cookbook-sync` branch. Once the docs repository's checks and
+Mintlify preview pass, the workflow approves and squash-merges that pull request
+as `openhands-agent`, which puts the changes live. Nothing in the docs repository
+needs a manual review. The approval is skipped, and the job fails, if the pull
+request changes anything other than `cookbook/` and `docs.json`, or if the docs
+checks fail; a docs maintainer then reviews it by hand.
 
 The nightly run rebuilds the pull request on top of the latest docs, so it stays
 mergeable when other docs changes touch `docs.json`. If nothing changed, the run
@@ -111,7 +114,10 @@ does nothing. To run it by hand, use **Run workflow** on the
 
 The workflows authenticate to OpenHands/docs as `openhands-release-bot`. The job
 that holds that credential only copies rendered files; it never installs
-dependencies or runs code from the pull request.
+dependencies or runs code from the pull request. The approval comes from a second
+identity, stored as the `DOCS_APPROVER_TOKEN` repository secret, because the
+author of a pull request cannot approve it. That token needs write access to
+OpenHands/docs and runs only on pushes to `main`.
 
 ## The Docs Repository
 
