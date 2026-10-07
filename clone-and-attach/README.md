@@ -33,7 +33,7 @@ on the two-server split.
 
 In the repository, at `.openhands/setup.sh`. That is the exact location
 OpenHands itself runs every time it starts working with a repo — see
-[Repository Customization](https://docs.all-hands.dev/usage/customization/repository).
+[Repository Customization](https://docs.openhands.dev/openhands/usage/customization/repository).
 This example runs that same file so the sandbox you hand off is set up the way
 the agent would expect. If a repo has no `.openhands/setup.sh`, the step is
 skipped with a note. (This repo ships a tiny one so the default run does
@@ -156,6 +156,6 @@ curl -X DELETE "https://app.all-hands.dev/api/v1/sandboxes/${SID}?sandbox_id=${S
 <!-- docs:cards -->
 
 - [`start-sandbox`](../start-sandbox/) - The bare sandbox lifecycle and the sandbox/agent-server split
-- [Repository Customization](https://docs.all-hands.dev/usage/customization/repository) - Where `.openhands/setup.sh` lives
+- [Repository Customization](https://docs.openhands.dev/openhands/usage/customization/repository) - Where `.openhands/setup.sh` lives
 
 <!-- /docs:cards -->

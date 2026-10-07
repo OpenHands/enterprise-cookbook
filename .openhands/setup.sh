@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # .openhands/setup.sh — runs automatically every time OpenHands starts working
-# with this repository (see https://docs.all-hands.dev/usage/customization/repository).
+# with this repository (see https://docs.openhands.dev/openhands/usage/customization/repository).
 #
 # It is also what the `clone-and-attach` example executes after it shallow-clones
 # this repo into a sandbox, so keep it fast and side-effect free.
