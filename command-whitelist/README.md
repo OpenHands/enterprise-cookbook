@@ -1,4 +1,4 @@
-# Command Whitelist with Hooks
+# Command Whitelist
 
 A self-contained example showing how to use **PreToolUse hooks** in a plugin to **whitelist approved shell commands**. The agent can only execute commands that are explicitly on the approved list - everything else is blocked.
 
@@ -14,20 +14,16 @@ The [`strict-mode/`](./strict-mode/) plugin bundles:
 
 ## How It Works
 
-```
-User: "Install the requests package with pip"
-  ↓
-Agent: *prepares terminal command: pip install requests*
-  ↓
-PreToolUse Hook: *intercepts before execution*
-  ├─ Extracts command name: "pip"
-  ├─ Checks whitelist: [ls, cat, grep, find, ...]
-  ├─ Not found in whitelist!
-  └─ Returns exit code 2 (block) + explanation
-  ↓
-Agent: *receives block + reason, explains to user*
-  ↓
-User: *sees which commands are allowed*
+```mermaid
+flowchart TD
+    A["User: #quot;Install the requests package with pip#quot;"] --> B["Agent: *prepares terminal command: pip install requests*"]
+    B --> C["PreToolUse Hook: *intercepts before execution*"]
+    C --> C1["Extracts command name: #quot;pip#quot;"]
+    C1 --> C2["Checks whitelist: [ls, cat, grep, find, ...]"]
+    C2 --> C3["Not found in whitelist!"]
+    C3 --> C4["Returns exit code 2 (block) + explanation"]
+    C4 --> D["Agent: *receives block + reason, explains to user*"]
+    D --> E["User: *sees which commands are allowed*"]
 ```
 
 ## Whitelisted Commands
@@ -41,7 +37,9 @@ Only these commands are allowed (all read-only operations):
 
 Everything else is **blocked by default**.
 
-## Try It
+## Run It
+
+<!-- docs:tabs -->
 
 ### Option 1: Load via API
 
@@ -65,10 +63,12 @@ python load_plugin.py \
 
 Click to test strict mode:
 
-[![Try Strict Mode](https://img.shields.io/badge/Try%20Strict%20Mode-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpqcHNoYWNrZWxmb3JkL29oLWV4YW1wbGVzIiwgInJlZiI6ICJtYWluIiwgInJlcG9fcGF0aCI6ICJjb21tYW5kLXdoaXRlbGlzdC9zdHJpY3QtbW9kZSJ9XQ%3D%3D&message=Install%20the%20requests%20package)
+[![Try Strict Mode](https://img.shields.io/badge/Try%20Strict%20Mode-blue)](https://app.all-hands.dev/launch?plugins=W3sic291cmNlIjogImdpdGh1YjpPcGVuSGFuZHMvZW50ZXJwcmlzZS1jb29rYm9vayIsICJyZWYiOiAibWFpbiIsICJyZXBvX3BhdGgiOiAiY29tbWFuZC13aGl0ZWxpc3Qvc3RyaWN0LW1vZGUifV0%3D&message=Install%20the%20requests%20package)
 
-> **Note:** Replace `ref: main` with your branch name if testing before merge:
-> `--ref add-hooks-examples`
+<!-- /docs:tabs -->
+
+> [!TIP]
+> To test the plugin from a branch before it's merged, pass `--ref <branch>` to `load_plugin.py`.
 
 ## The Hook
 
@@ -169,7 +169,7 @@ For production security, consider:
 
 ## Plugin Structure
 
-```
+```text
 strict-mode/
 ├── .claude-plugin/
 │   └── plugin.json          # Plugin metadata
@@ -184,14 +184,6 @@ This follows the **Claude Code plugin format**, compatible with:
 - OpenHands Cloud plugin launcher
 - Claude Desktop plugin marketplace
 - Any system supporting the `.claude-plugin` spec
-
-## Related
-
-- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks.md) - Full hook documentation
-- [Plugin System](https://docs.openhands.dev/sdk/guides/plugins.md) - How plugins work
-- [`load-plugin`](../load-plugin/) - Programmatic plugin loading
-- [`launch-plugin-badge`](../launch-plugin-badge/) - No-code plugin launcher
-- [`command-blacklist`](../command-blacklist/) - Blacklist approach (opposite strategy)
 
 ## Real-World Use Cases
 
@@ -211,3 +203,15 @@ Start strict, then gradually expand:
 4. **As needed:** Carefully evaluate and add new commands
 
 This way you build trust and understand usage patterns before opening up.
+
+## Related
+
+<!-- docs:cards -->
+
+- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks) - Full hook documentation
+- [Plugin System](https://docs.openhands.dev/sdk/guides/plugins) - How plugins work
+- [`load-plugin`](../load-plugin/) - Programmatic plugin loading
+- [`launch-plugin-badge`](../launch-plugin-badge/) - No-code plugin launcher
+- [`command-blacklist`](../command-blacklist/) - Blacklist approach (opposite strategy)
+
+<!-- /docs:cards -->

@@ -1,4 +1,4 @@
-# test-mcp-config
+# Test MCP Config
 
 Validate **MCP server configurations** against a real sandbox's agent-server,
 **before** wiring them into a conversation.
@@ -17,13 +17,14 @@ The agent-server already ships an endpoint that solves this:
 and optionally invokes one read-only tool to exercise credentials. This example
 drives that endpoint from the Cloud API so you can verify a config end-to-end.
 
+> [!IMPORTANT]
 > Requires an agent-server that includes `POST /api/mcp/test`
 > (added in **agent-server 1.29.0 / OpenHands 1.8.0**). Older runtimes return
 > `404` and the script tells you to upgrade the runtime image.
 
-## How it works
+## How It Works
 
-```
+```text
 1. POST /api/v1/sandboxes              -> start a sandbox (no conversation)
 2. GET  /api/v1/sandboxes?id=<id>      -> poll until status == RUNNING
 3. read exposed_urls[AGENT_SERVER]     -> the sandbox's agent-server URL
@@ -64,7 +65,7 @@ pip install requests
 # or, from the repo root: uv run --with requests test-mcp-config/test_mcp_config.py ...
 ```
 
-## Usage
+## Run It
 
 ```bash
 # Single remote (streamable-http) server with a bearer token
@@ -109,6 +110,7 @@ python test_mcp_config.py --from-settings --list
 python test_mcp_config.py --from-settings --server jira --server figma
 ```
 
+> [!NOTE]
 > MCP config is a **single shared map** (`mcp_config.mcpServers`) — it is not
 > split across LLM/settings profiles, so "multiple installed" means multiple
 > servers in that one map. Use `--list` to discover names, then `--server` to
@@ -132,7 +134,7 @@ By default the script creates a sandbox, runs the tests, and deletes the
 sandbox. Pass `--keep` (or `--sandbox-id`) to leave it running. The process
 exits non-zero if any server fails, so it is CI-friendly.
 
-## Example output
+## Example Output
 
 Running against three servers — the official MCP reference server
 ([`@modelcontextprotocol/server-everything`](https://github.com/modelcontextprotocol/servers/tree/main/src/everything),
@@ -157,10 +159,11 @@ agent: https://<runtime-host>.prod-runtime.all-hands.dev
 Deleting sandbox 2092i4jTpja41kRuzNcLIJ ...
 ```
 
+> [!TIP]
 > Tip: stdio servers fetched via `npx -y` download on first run, so give them a
 > longer `--timeout` (e.g. `--timeout 90`).
 
-## Notes & limitations
+## Notes & Limitations
 
 - **Credentials checked only on tool invocation.** Some servers connect and
   list tools fine with a bad token, and only fail when a tool runs. Pass

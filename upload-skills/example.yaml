@@ -1,0 +1,5 @@
+---
+title: Upload Skills
+description: Upload a local agent-skills directory into a sandbox, then start a conversation that uses them.
+category: Plugins, skills & MCP
+icon: upload

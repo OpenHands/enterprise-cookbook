@@ -1,4 +1,4 @@
-# Upload a local skills directory, then start a conversation
+# Upload Skills
 
 This example is a small command-line tool: you hand it a **local agent-skills
 directory** and it provisions a sandbox, copies your skills into the right place
@@ -10,13 +10,14 @@ It builds on [`clone-and-attach`](../clone-and-attach/), which prepares a sandbo
 sandbox by **uploading skills** instead. Read [`start-sandbox`](../start-sandbox/)
 first if the sandbox/agent-server split is new to you.
 
-## Why would I do this?
+## Why Would I Do This?
 
 You have skills authored locally (a folder of `SKILL.md` files) and you want an
 agent to use them *without* committing them to a repo or installing them by
 hand. This script drops them into the sandbox's **user skills directory** before
 the conversation starts, so the brand-new conversation loads them automatically.
 
+> [!TIP]
 > **Most of the time you don't need this script.** The standard ways to give a
 > workspace skills are to **store them in your repository as a plugin** (e.g.
 > under `.openhands/skills/`) and **start the conversation with that plugin
@@ -40,12 +41,13 @@ dedicated `SETTING_UP_SKILLS` phase.) Putting them under the user home — rathe
 than a repo's `.openhands/skills/` — means they load regardless of whether a
 repository is selected.
 
+> [!NOTE]
 > Already-running conversations are **not** re-scanned. Upload skills first,
 > then start the conversation — which is exactly what this script does.
 
-## The flow
+## How It Works
 
-```
+```text
 POST /api/v1/sandboxes                       # 1. start a sandbox (no conversation)
 GET  /api/v1/sandboxes?id=<id>               # 2. poll until status == RUNNING
 GET  {agent}/api/file/home                   # 3. resolve ~  (sandbox user's home)
@@ -68,7 +70,7 @@ local directory (`arcname="."`) into a single `.tar.gz`, uploads that one
 archive, and extracts it with `tar -xzf ... -C <target>`. So a local layout
 like:
 
-```
+```text
 my-skills/
 ├── code-review/SKILL.md
 └── deploy-helper/SKILL.md
@@ -77,7 +79,7 @@ my-skills/
 ends up as `~/.openhands/skills/code-review/SKILL.md` and
 `~/.openhands/skills/deploy-helper/SKILL.md` in the sandbox.
 
-## Run it
+## Run It
 
 ```bash
 export OH_API_KEY=...        # your https://app.all-hands.dev API key
@@ -90,7 +92,7 @@ python upload_skills.py ./example-skills
 
 Sample output:
 
-```
+```text
 local skills dir: /path/to/enterprise-cookbook/upload-skills/example-skills
   AgentSkills (SKILL.md): 1
     - hello-openhands
@@ -117,7 +119,7 @@ Conversation started on your skills-loaded sandbox:
 Open that URL and ask the agent to *"say hello"* — it should answer using the
 uploaded `hello-openhands` skill.
 
-## Point it at your own skills
+## Point It at Your Own Skills
 
 Every input is a flag with an environment-variable fallback, so the script is
 safe to drop into your own automation unchanged:
@@ -164,6 +166,7 @@ So a typical flow is: run this script once to seed a sandbox with your skills,
 set a grouping strategy in the UI, then just open new conversations normally and
 they'll already know your skills.
 
+> [!WARNING]
 > **Caveat: this only works while the seeded sandbox is still running.** A new
 > conversation can only join a sandbox that is still running. If the seeded
 > sandbox has gone **inactive** (paused after a stretch of no activity, but not

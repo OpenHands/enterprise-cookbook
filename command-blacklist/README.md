@@ -1,4 +1,4 @@
-# Command Blacklist with Hooks
+# Command Blacklist
 
 A self-contained example showing how to use **PreToolUse hooks** in a plugin to **blacklist dangerous shell commands**. When the agent tries to execute a risky command, the hook blocks it with helpful (and slightly snarky) feedback.
 
@@ -167,7 +167,7 @@ Hooks can intercept different lifecycle events:
 
 ## Plugin Structure
 
-```
+```text
 safety-guardian/
 ├── .claude-plugin/
 │   └── plugin.json          # Plugin metadata
@@ -182,18 +182,6 @@ This follows the **Claude Code plugin format**, compatible with:
 - OpenHands Cloud plugin launcher
 - Claude Desktop plugin marketplace
 - Any system supporting the `.claude-plugin` spec
-
-## Related
-
-<!-- docs:cards -->
-
-- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks.md) - Full hook documentation
-- [Plugin System](https://docs.openhands.dev/sdk/guides/plugins.md) - How plugins work
-- [`load-plugin`](../load-plugin/) - Programmatic plugin loading
-- [`launch-plugin-badge`](../launch-plugin-badge/) - No-code plugin launcher
-- [`command-whitelist`](../command-whitelist/) - Whitelist approach (opposite strategy)
-
-<!-- /docs:cards -->
 
 ## Real-World Use Cases
 
@@ -221,3 +209,15 @@ fi
 ```
 
 The inline bash makes it easy to iterate without rebuilding images or restarting servers.
+
+## Related
+
+<!-- docs:cards -->
+
+- [OpenHands Hooks Guide](https://docs.openhands.dev/sdk/guides/hooks) - Full hook documentation
+- [Plugin System](https://docs.openhands.dev/sdk/guides/plugins) - How plugins work
+- [`load-plugin`](../load-plugin/) - Programmatic plugin loading
+- [`launch-plugin-badge`](../launch-plugin-badge/) - No-code plugin launcher
+- [`command-whitelist`](../command-whitelist/) - Whitelist approach (opposite strategy)
+
+<!-- /docs:cards -->
