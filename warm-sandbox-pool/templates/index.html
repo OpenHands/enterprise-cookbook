@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warm Sandbox Pool Demo</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img class="brand-logo" src="{{ url_for('static', filename='openhands-logo.svg') }}" alt="OpenHands">
+            <div class="brand-text">
+                <h1>Warm Sandbox Pool</h1>
+                <p class="subtitle">Pre-initialized OpenHands sandboxes with Ruby services ready to go</p>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <!-- Left Panel: Pool Visualization -->
+            <div class="panel pool-panel">
+                <h2>📦 Sandbox Pool</h2>
+                <div class="pool-stats" id="pool-stats">
+                    <div class="stat">
+                        <span class="stat-label">Target Size:</span>
+                        <span class="stat-value" id="pool-size">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Ready:</span>
+                        <span class="stat-value ready-count" id="ready-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Threshold:</span>
+                        <span class="stat-value" id="threshold">-</span>
+                    </div>
+                </div>
+
+                <div class="pool-stats" id="claim-stats">
+                    <div class="stat">
+                        <span class="stat-label">Claims:</span>
+                        <span class="stat-value" id="claim-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg warm-up:</span>
+                        <span class="stat-value" id="avg-warmup">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg attach:</span>
+                        <span class="stat-value" id="avg-attach">-</span>
+                    </div>
+                </div>
+                <p class="stats-note">
+                    <strong>Warm-up</strong> is the sandbox boot plus init script that a cold
+                    start would add to each conversation's wait. <strong>Attach</strong> is the
+                    conversation start itself, which happens either way.
+                </p>
+
+                <p id="refill-line" class="refill-line"></p>
+
+                <h3 class="section-title">In the pool</h3>
+                <div id="sandbox-list" class="sandbox-list">
+                    <!-- Sandbox cards will be inserted here -->
+                </div>
+
+                <h3 class="section-title">Claimed by conversations</h3>
+                <div id="claimed-list" class="claimed-list">
+                    <p class="empty-note">Nothing claimed yet.</p>
+                </div>
+
+                <div class="pool-legend">
+                    <h3>Status Legend</h3>
+                    <div class="legend-item">
+                        <span class="status-badge status-starting">🔴</span>
+                        <span>STARTING - Provisioning sandbox</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-badge status-preparing">🟡</span>
+                        <span>PREPARING - Installing Ruby & gems</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-badge status-ready">🟢</span>
+                        <span>READY - Available for conversations</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-badge status-allocated">🟦</span>
+                        <span>ALLOCATED - In use by conversation</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-badge status-failed">⚠️</span>
+                        <span>FAILED - Initialization error</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Conversation Interface -->
+            <div class="panel conversation-panel">
+                <h2>💬 Start a Conversation</h2>
+
+                <p id="halted-notice" class="error-message" style="display: none;">
+                    ❌ Provisioning failed repeatedly, so refilling has stopped. See the
+                    controller's terminal output, fix the cause, and restart it.
+                </p>
+
+                <div id="waiting-state" class="waiting-state">
+                    <div class="spinner"></div>
+                    <p>Preparing sandbox pool...</p>
+                    <p class="waiting-subtext">This usually takes under a minute on first start</p>
+                </div>
+
+                <div id="ready-state" class="ready-state" style="display: none;">
+                    <div class="info-box" id="ready-info">
+                        <p><strong>✨ Pool is ready!</strong></p>
+                        <p>Type a message below to start an OpenHands conversation. A pre-warmed sandbox with Ruby and Sinatra already installed will be allocated to your conversation right away.</p>
+                    </div>
+
+                    <p id="refill-notice" class="refill-notice" style="display: none;">
+                        ⏳ No warm sandbox is ready right now. The pool is refilling and you
+                        can start the next conversation as soon as one turns green.
+                    </p>
+
+                    <div class="conversation-form">
+                        <label for="message-input">Your message to the agent:</label>
+                        <textarea
+                            id="message-input"
+                            rows="4"
+                            placeholder="Describe what the agent should do in the warm sandbox."
+                        >Check if the quote service is running on localhost:4567 and fetch me a random quote. Show me the result.</textarea>
+
+                        <button id="start-btn" class="btn-primary">
+                            🚀 Start Conversation
+                        </button>
+                    </div>
+
+                    <div id="result-area" class="result-area" style="display: none;">
+                        <!-- Conversation results will appear here -->
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>About This Demo</h3>
+                    <p>This demonstrates the <strong>Warm Sandbox Pool</strong> technique for taking sandbox startup and initialization out of the wait when using OpenHands agents.</p>
+
+                    <h4>What's Pre-Installed:</h4>
+                    <ul>
+                        <li>Ruby 3.x runtime</li>
+                        <li>Sinatra gem</li>
+                        <li>Quote service API running on port 4567</li>
+                    </ul>
+
+                    <h4>Try These Commands:</h4>
+                    <ul>
+                        <li>"Check if the quote service is running on localhost:4567"</li>
+                        <li>"Fetch a random quote from localhost:4567/quote and show it to me"</li>
+                        <li>"List all quotes available in the service"</li>
+                        <li>"Show me the Ruby version installed in this sandbox"</li>
+                    </ul>
+
+                    <div class="note">
+                        <strong>💡 For Custom Applications:</strong> Replace the demo Sinatra service in <code>sandbox_prep/init_ruby_service.sh</code> with your actual application initialization commands.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel activity-panel">
+            <h2>📜 Live Activity</h2>
+            <div id="event-log" class="event-log">
+                <p class="empty-note">Waiting for activity...</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>
+            <strong>Warm Sandbox Pool</strong> -
+            Alternative to custom images for deploying Ruby-based services |
+            <a href="https://github.com/OpenHands/enterprise-cookbook" target="_blank">View on GitHub</a>
+        </p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
