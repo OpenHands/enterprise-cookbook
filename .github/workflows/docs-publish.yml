@@ -116,7 +116,7 @@ jobs:
               if: steps.push.outputs.changed == 'true' && steps.wait.outputs.ok == 'true'
               env:
                   DOCS_TOKEN: ${{ steps.app.outputs.token }}
-                  APPROVER_TOKEN: ${{ secrets.DOCS_APPROVER_TOKEN }}
+                  APPROVER_TOKEN: ${{ secrets.OPENHANDS_BOT_GITHUB_PAT_PUBLIC }}
               run: |
                   python3 src/.github/scripts/docs_sync.py approve \
                     --pr "${{ steps.push.outputs.pr_number }}" --branch "$SYNC_BRANCH" \
