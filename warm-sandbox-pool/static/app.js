@@ -243,9 +243,6 @@ class PoolUI {
         const button = document.getElementById('start-btn');
         const resultArea = document.getElementById('result-area');
 
-        // Set default message
-        form.value = "Check if the quote service is running on localhost:4567 and fetch me a random quote. Show me the result.";
-
         button.addEventListener('click', async () => {
             const message = form.value.trim();
 
@@ -275,9 +272,6 @@ class PoolUI {
 
                 // Show success result
                 this.showResult(data, false);
-
-                // Clear input
-                form.value = '';
 
             } catch (error) {
                 console.error('Error starting conversation:', error);
