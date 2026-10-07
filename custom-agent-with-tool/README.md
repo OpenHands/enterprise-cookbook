@@ -1,4 +1,4 @@
-# custom-agent-with-tool
+# Custom Agent With Tool
 
 Add a **completely custom, server-side tool** to an OpenHands Cloud agent — without
 forking or rebuilding the agent-server. The agent-server loads your tool at
@@ -13,7 +13,37 @@ plus a gloriously bureaucratic classification. Because the Case ID is a SHA-256 
 of the bug report, the only way the agent's answer can contain the correct ID is if
 it actually called the tool — making the demonstration unfalsifiable.
 
-## The core idea: declare + locate
+## How It Works
+
+1. **Create a sandbox** (`POST /api/v1/sandboxes`) and wait for `RUNNING`. Read the
+   `AGENT_SERVER` URL and the `session_api_key` from the sandbox record.
+2. **Deploy the tool** as an importable package in the conversation's working
+   directory, `/workspace/bug_registry/`, using the agent-server file API
+   (`POST /api/file/upload?path=...`). Two files are uploaded: `__init__.py` and
+   `tool.py` (the contents of `custom_tool_definition.py`).
+3. **Create a conversation** (`POST /api/conversations`) that lists the tool in
+   `agent.tools` and maps it in `tool_module_qualnames`.
+4. **Run and verify** (`POST .../run`, then read events). The custom tool must show
+   up in the `SystemPromptEvent.tools` list (registered) and as an `ActionEvent`
+   `tool_name` (used).
+
+### Why upload into the working directory (and not `pip install`)?
+
+On OpenHands Cloud the agent-server is a **frozen, self-contained binary** (built
+with PyInstaller). A normal `pip install` targets a *different* Python interpreter
+that the frozen server cannot see, so the module would never be importable and the
+tool would fail to register.
+
+The conversation's **working directory is on the agent-server's import path**, so
+dropping the package there makes `import rubber_duck.tool` work with no install
+step. The tool's own imports (`openhands.sdk`, `pydantic`) resolve from inside the
+frozen server, where they're always available.
+
+Uploading the file (rather than writing it through a shell heredoc) also means the
+**tool source can contain anything** — quotes, `EOF` markers, backslashes — with no
+escaping or injection pitfalls.
+
+## The Core Idea: Declare + Locate
 
 Creating a conversation with a custom tool is a two-part contract:
 
@@ -45,13 +75,14 @@ export LLM_MODEL=litellm_proxy/claude-sonnet-4-5-20250929
 export LLM_BASE_URL=https://llm-proxy.app.all-hands.dev/
 ```
 
-## Run it
+## Run It
 
 ```bash
 python working_example.py            # runs and cleans up the sandbox
 python working_example.py --keep     # leave the sandbox up for inspection
 ```
 
+> [!WARNING]
 > **⚠️ Timing note**: If the script runs and deletes the sandbox too quickly, conversation
 > events may not have synced from the agent-server to the main API yet, making the
 > conversation appear empty or incomplete in the Cloud UI. To inspect conversation events
@@ -61,7 +92,7 @@ python working_example.py --keep     # leave the sandbox up for inspection
 
 Expected output:
 
-```
+```text
 [demo] === Verification ===
 [demo]   registered tools: ['terminal', 'file_editor', 'bug_registry', 'finish', 'think']
 [demo]   tools used: ['bug_registry']
@@ -72,37 +103,7 @@ Expected output:
 [demo] SUCCESS: the custom tool was loaded and used in OpenHands Cloud.
 ```
 
-## How it works
-
-1. **Create a sandbox** (`POST /api/v1/sandboxes`) and wait for `RUNNING`. Read the
-   `AGENT_SERVER` URL and the `session_api_key` from the sandbox record.
-2. **Deploy the tool** as an importable package in the conversation's working
-   directory, `/workspace/bug_registry/`, using the agent-server file API
-   (`POST /api/file/upload?path=...`). Two files are uploaded: `__init__.py` and
-   `tool.py` (the contents of `custom_tool_definition.py`).
-3. **Create a conversation** (`POST /api/conversations`) that lists the tool in
-   `agent.tools` and maps it in `tool_module_qualnames`.
-4. **Run and verify** (`POST .../run`, then read events). The custom tool must show
-   up in the `SystemPromptEvent.tools` list (registered) and as an `ActionEvent`
-   `tool_name` (used).
-
-### Why upload into the working directory (and not `pip install`)?
-
-On OpenHands Cloud the agent-server is a **frozen, self-contained binary** (built
-with PyInstaller). A normal `pip install` targets a *different* Python interpreter
-that the frozen server cannot see, so the module would never be importable and the
-tool would fail to register.
-
-The conversation's **working directory is on the agent-server's import path**, so
-dropping the package there makes `import rubber_duck.tool` work with no install
-step. The tool's own imports (`openhands.sdk`, `pydantic`) resolve from inside the
-frozen server, where they're always available.
-
-Uploading the file (rather than writing it through a shell heredoc) also means the
-**tool source can contain anything** — quotes, `EOF` markers, backslashes — with no
-escaping or injection pitfalls.
-
-## Verifying registration (same technique as `custom-agent-no-browser`)
+## Verifying Registration (Same Technique as `custom-agent-no-browser`)
 
 The agent-server records a `SystemPromptEvent` whose `tools` array is the exact set
 of tools the agent was given. Both examples read it the same way:
@@ -118,7 +119,7 @@ The verification also extracts the **Case ID** from the tool's observation (the 
 truth) and confirms that exact ID appears in the agent's final answer — proving the
 tool's output shaped the response and the agent didn't fabricate it.
 
-## The example tool
+## The Example Tool
 
 `custom_tool_definition.py` defines a `bug_registry` tool with the OpenHands SDK: a
 `ToolDefinition` + typed `Action`/`Observation` + an `Executor`. It takes a `problem`
@@ -149,6 +150,7 @@ curl -X DELETE "https://app.all-hands.dev/api/v1/sandboxes/<id>?sandbox_id=<id>"
   -H "Authorization: Bearer $OH_API_KEY"
 ```
 
+> [!NOTE]
 > Note: `DELETE /api/v1/sandboxes/{id}` requires `sandbox_id` as **both** the path
 > segment and a query parameter; omitting the query parameter returns HTTP 422 and
 > leaks the sandbox.

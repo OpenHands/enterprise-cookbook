@@ -1,0 +1,5 @@
+---
+title: Custom Agent With Tool
+description: Add custom server-side tools via source file upload and tool_module_qualnames.
+category: Custom agents & tools
+icon: wrench

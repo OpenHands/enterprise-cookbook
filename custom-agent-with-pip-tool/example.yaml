@@ -1,0 +1,5 @@
+---
+title: Custom Pip Tool Agent
+description: Load a custom tool from a published pip package via pip install --target and tool_module_qualnames.
+category: Custom agents & tools
+icon: box

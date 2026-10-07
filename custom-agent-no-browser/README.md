@@ -1,4 +1,4 @@
-# Custom Agent Configuration via Agent-Server API
+# Custom Agent No Browser
 
 This example demonstrates **the correct pattern** for customizing agent tools using the OpenHands agent-server API. It configures an agent that has `terminal`, `file_editor`, and `task_tracker` but **no browser tool**, then verifies the result.
 
@@ -43,101 +43,8 @@ requests.post(
 
 Because the `agent` object defines the **whole** agent spec (LLM **and** tools) in a single request, the tools always take effect. The agent-server automatically adds the `finish` and `think` tools, so the resulting conversation exposes those two plus the three you asked for. The browser is excluded simply by not being in the list.
 
+> [!WARNING]
 > **Pitfall to avoid:** Do not set tools separately via `PATCH /api/settings` and then create the conversation with an `agent` object that contains only an `llm`. Sending an `agent` object without `tools` replaces the whole agent spec and drops the tools you configured, leaving the agent with just `finish` and `think`. Passing tools inline (as above) avoids this.
-
-## Usage
-
-### Prerequisites
-
-```bash
-pip install requests
-
-# OpenHands Cloud API key (for sandbox management)
-export OH_API_KEY=your-cloud-api-key
-
-# OpenHands LLM API key (get from Profile -> API Keys)
-export LLM_API_KEY=your-llm-api-key
-
-# LiteLLM proxy URL (default works for OpenHands Cloud)
-export LLM_BASE_URL=https://llm-proxy.app.all-hands.dev/
-```
-
-**Important:** When using the agent-server API directly, you must provide both
-`LLM_API_KEY` and `LLM_BASE_URL`. The agent-server needs to know where to send
-LLM requests and how to authenticate with the LiteLLM proxy.
-
-### Run
-
-```bash
-python agent_no_browser.py
-```
-
-The script creates a sandbox, creates a conversation with the custom tools,
-runs a small task, verifies the tools, and deletes the sandbox. It exits with a
-non-zero status if verification fails.
-
-Expected output:
-
-```
-=== Creating sandbox via Cloud API ===
-  sandbox: 2osAXsenK3xynchCyUvt4T
-  waiting for sandbox...
-    status: RUNNING
-  ✓ sandbox ready: 2osAXsenK3xynchCyUvt4T
-  agent-server: https://xxxx.prod-runtime.all-hands.dev
-
-=== Creating conversation ===
-  model: litellm_proxy/claude-sonnet-4-5-20250929
-  base_url: https://llm-proxy.app.all-hands.dev/
-  tools: terminal, file_editor, task_tracker
-  ✓ conversation created: 392e2589-...
-
-=== Running conversation ===
-  conversation already running
-  waiting for completion...
-    execution_status: running
-  ✓ conversation completed successfully
-
-=== Verifying tools ===
-
-  Available tools:
-  total tools: 5
-
-  🔧 Core tools (5):
-    • terminal
-    • file_editor
-    • task_tracker
-    • finish
-    • think
-
-  ✅ PASS: all expected tools present: ['terminal', 'file_editor', 'task_tracker']
-  ✅ PASS: no browser tools in available tools list
-
-  Tools actually used: ['file_editor']
-  ✅ PASS: no browser tools were used
-
-=== Results ===
-View conversation: https://app.all-hands.dev/conversations/392e2589-...
-Agent-server: https://xxxx.prod-runtime.all-hands.dev
-
-=== Cleanup ===
-  ✓ deleted conversation 392e2589-...
-  ✓ deleted sandbox 2osAXsenK3xynchCyUvt4T
-
-✅ Success: agent configured with the expected tools (no browser).
-```
-
-> The exact tool set can vary with your account configuration (for example, MCP
-> integrations may add more tools). What this example guarantees is that the
-> three requested tools are present and no browser tool is included.
-
-### Keep Resources for Inspection
-
-```bash
-python agent_no_browser.py --keep
-```
-
-This skips cleanup so you can inspect the conversation in the UI.
 
 ## How It Works
 
@@ -257,6 +164,102 @@ requests.delete(
 )
 ```
 
+## Run It
+
+### Prerequisites
+
+```bash
+pip install requests
+
+# OpenHands Cloud API key (for sandbox management)
+export OH_API_KEY=your-cloud-api-key
+
+# OpenHands LLM API key (get from Profile -> API Keys)
+export LLM_API_KEY=your-llm-api-key
+
+# LiteLLM proxy URL (default works for OpenHands Cloud)
+export LLM_BASE_URL=https://llm-proxy.app.all-hands.dev/
+```
+
+> [!IMPORTANT]
+> **Important:** When using the agent-server API directly, you must provide both
+> `LLM_API_KEY` and `LLM_BASE_URL`. The agent-server needs to know where to send
+> LLM requests and how to authenticate with the LiteLLM proxy.
+
+### Run
+
+```bash
+python agent_no_browser.py
+```
+
+The script creates a sandbox, creates a conversation with the custom tools,
+runs a small task, verifies the tools, and deletes the sandbox. It exits with a
+non-zero status if verification fails.
+
+Expected output:
+
+```text
+=== Creating sandbox via Cloud API ===
+  sandbox: 2osAXsenK3xynchCyUvt4T
+  waiting for sandbox...
+    status: RUNNING
+  ✓ sandbox ready: 2osAXsenK3xynchCyUvt4T
+  agent-server: https://xxxx.prod-runtime.all-hands.dev
+
+=== Creating conversation ===
+  model: litellm_proxy/claude-sonnet-4-5-20250929
+  base_url: https://llm-proxy.app.all-hands.dev/
+  tools: terminal, file_editor, task_tracker
+  ✓ conversation created: 392e2589-...
+
+=== Running conversation ===
+  conversation already running
+  waiting for completion...
+    execution_status: running
+  ✓ conversation completed successfully
+
+=== Verifying tools ===
+
+  Available tools:
+  total tools: 5
+
+  🔧 Core tools (5):
+    • terminal
+    • file_editor
+    • task_tracker
+    • finish
+    • think
+
+  ✅ PASS: all expected tools present: ['terminal', 'file_editor', 'task_tracker']
+  ✅ PASS: no browser tools in available tools list
+
+  Tools actually used: ['file_editor']
+  ✅ PASS: no browser tools were used
+
+=== Results ===
+View conversation: https://app.all-hands.dev/conversations/392e2589-...
+Agent-server: https://xxxx.prod-runtime.all-hands.dev
+
+=== Cleanup ===
+  ✓ deleted conversation 392e2589-...
+  ✓ deleted sandbox 2osAXsenK3xynchCyUvt4T
+
+✅ Success: agent configured with the expected tools (no browser).
+```
+
+> [!NOTE]
+> The exact tool set can vary with your account configuration (for example, MCP
+> integrations may add more tools). What this example guarantees is that the
+> three requested tools are present and no browser tool is included.
+
+### Keep Resources for Inspection
+
+```bash
+python agent_no_browser.py --keep
+```
+
+This skips cleanup so you can inspect the conversation in the UI.
+
 ## Available Tools
 
 Common tool names you can include:
@@ -265,24 +268,6 @@ Common tool names you can include:
 - `file_editor` - Read/write/edit files
 - `task_tracker` - Track tasks and progress
 - `browser_tool_set` - Web browser automation (excluded in this example)
-
-## Key Agent-Server APIs Used
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/conversations` | POST | Create conversation (pass `agent.llm` and `agent.tools`) |
-| `/api/conversations/{id}/run` | POST | Start conversation execution |
-| `/api/conversations/{id}` | GET | Get conversation status |
-| `/api/conversations/{id}/events/search` | GET | Get conversation events (tools, actions) |
-| `/api/conversations/{id}` | DELETE | Delete the conversation |
-
-## Cloud APIs Used
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/sandboxes` | POST | Create a sandbox |
-| `/api/v1/sandboxes?id={id}` | GET | Poll sandbox status / read `exposed_urls` |
-| `/api/v1/sandboxes/{id}?sandbox_id={id}` | DELETE | Delete the sandbox |
 
 ## Common Issues
 
@@ -318,20 +303,9 @@ fetch its events, and consider a simpler task or a longer timeout.
 
 ## Architecture Notes
 
-```
-+---------------------------------------------------------+
-|  Cloud API (app.all-hands.dev)                          |
-|  - Authentication (Bearer OH_API_KEY)                   |
-|  - Sandbox lifecycle (create / list / delete)           |
-+---------------------------------------------------------+
-                        |  creates
-                        v
-+---------------------------------------------------------+
-|  Agent-Server (sandbox-specific runtime URL)            |
-|  - Auth via session API key (X-Session-API-Key)         |
-|  - Agent configuration (LLM, tools)                     |
-|  - Conversation execution                               |
-+---------------------------------------------------------+
+```mermaid
+flowchart TD
+    A["Cloud API (app.all-hands.dev)<br/>- Authentication (Bearer OH_API_KEY)<br/>- Sandbox lifecycle (create / list / delete)"] -->|creates| B["Agent-Server (sandbox-specific runtime URL)<br/>- Auth via session API key (X-Session-API-Key)<br/>- Agent configuration (LLM, tools)<br/>- Conversation execution"]
 ```
 
 **Key insight:** Agent customization happens at the **agent-server level**. The
@@ -342,8 +316,32 @@ when creating the conversation.
 
 - See `../custom-agent-with-tool/` for adding completely custom tools.
 
-## Related Documentation
+## APIs Used
+
+### Key Agent-Server APIs Used
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/conversations` | POST | Create conversation (pass `agent.llm` and `agent.tools`) |
+| `/api/conversations/{id}/run` | POST | Start conversation execution |
+| `/api/conversations/{id}` | GET | Get conversation status |
+| `/api/conversations/{id}/events/search` | GET | Get conversation events (tools, actions) |
+| `/api/conversations/{id}` | DELETE | Delete the conversation |
+
+### Cloud APIs Used
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/sandboxes` | POST | Create a sandbox |
+| `/api/v1/sandboxes?id={id}` | GET | Poll sandbox status / read `exposed_urls` |
+| `/api/v1/sandboxes/{id}?sandbox_id={id}` | DELETE | Delete the sandbox |
+
+## Related
+
+<!-- docs:cards -->
 
 - [OpenHands SDK Guide](https://docs.openhands.dev/sdk)
 - [Agent Settings](https://docs.openhands.dev/sdk/guides/agent-settings)
 - [Custom Tools](https://docs.openhands.dev/sdk/guides/custom-tools)
+
+<!-- /docs:cards -->

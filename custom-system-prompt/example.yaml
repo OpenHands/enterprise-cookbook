@@ -1,0 +1,5 @@
+---
+title: Custom System Prompt
+description: Override the default OpenHands system prompt with a custom one for specialized agents.
+category: Custom agents & tools
+icon: message
