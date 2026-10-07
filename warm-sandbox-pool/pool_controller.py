@@ -4,7 +4,7 @@ Warm Sandbox Pool Controller
 
 Maintains a pool of pre-initialized OpenHands sandboxes with Ruby/Sinatra services
 already running. When users start conversations, sandboxes are pulled from the pool
-and attached instantly, with automatic refill.
+and attached without a boot or setup wait, with automatic refill.
 
 Usage:
     export OH_API_KEY=your_key_here
@@ -25,6 +25,7 @@ import signal
 import sys
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -65,10 +66,19 @@ class PooledSandbox:
     ready_at: datetime | None = None
     allocated_at: datetime | None = None
     conversation_id: str | None = None
+    attach_seconds: float | None = None
     error_message: str | None = None
     init_log: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        warmup = (
+            (self.ready_at - self.created_at).total_seconds() if self.ready_at else None
+        )
+        idle = (
+            (self.allocated_at - self.ready_at).total_seconds()
+            if self.allocated_at and self.ready_at
+            else None
+        )
         return {
             "id": self.id,
             "state": self.state.value,
@@ -79,6 +89,9 @@ class PooledSandbox:
             if self.allocated_at
             else None,
             "conversation_id": self.conversation_id,
+            "warmup_seconds": warmup,
+            "idle_seconds": idle,
+            "attach_seconds": self.attach_seconds,
             "error_message": self.error_message,
             "init_log": self.init_log[-10:],  # Last 10 log lines
         }
@@ -111,6 +124,9 @@ class PoolController:
         self.lock = threading.RLock()
         self.running = True
         self.consecutive_failures = 0
+        self.claim_misses = 0
+        self.events: deque[dict] = deque(maxlen=200)
+        self.event_seq = 0
 
         prep_dir = Path(__file__).parent / "sandbox_prep"
         self.init_script = self._load_file(prep_dir / "init_ruby_service.sh")
@@ -125,6 +141,20 @@ class PoolController:
         if not path.exists():
             raise FileNotFoundError(f"Sandbox prep file not found: {path}")
         return path.read_text()
+
+    def _record(self, kind: str, message: str, sandbox_id: str | None = None) -> None:
+        """Append to the activity feed shown in the web UI."""
+        with self.lock:
+            self.event_seq += 1
+            self.events.append(
+                {
+                    "seq": self.event_seq,
+                    "timestamp": datetime.now().isoformat(),
+                    "kind": kind,
+                    "sandbox_id": sandbox_id,
+                    "message": message,
+                }
+            )
 
     @property
     def halted(self) -> bool:
@@ -199,6 +229,7 @@ class PoolController:
             with self.lock:
                 self.all_sandboxes[sandbox_id] = sandbox
             logger.info(f"Sandbox {sandbox_id}: STARTING")
+            self._record("created", "Requested a new sandbox", sandbox_id)
 
             # 2. Poll until RUNNING
             sandbox = self._wait_until_running(sandbox, timeout=180)
@@ -206,6 +237,7 @@ class PoolController:
             # 3. Run initialization script
             sandbox.state = SandboxState.PREPARING
             logger.info(f"Sandbox {sandbox_id}: PREPARING (running init script)")
+            self._record("preparing", "Running the init script", sandbox_id)
             self._run_init_script(sandbox)
 
             # 4. Mark as ready and add to queue
@@ -219,15 +251,23 @@ class PoolController:
             if not accepted:
                 self._delete_sandbox(sandbox_id)
                 return
-            logger.info(
-                f"Sandbox {sandbox_id}: READY "
-                f"(took {(sandbox.ready_at - sandbox.created_at).seconds}s)"
+            warmup = (sandbox.ready_at - sandbox.created_at).total_seconds()
+            logger.info(f"Sandbox {sandbox_id}: READY (took {warmup:.0f}s)")
+            self._record(
+                "ready",
+                f"Warm and waiting in the pool (took {warmup:.0f}s)",
+                sandbox_id,
             )
 
         except Exception as e:
             logger.error(f"Failed to provision sandbox: {e}", exc_info=True)
             with self.lock:
                 self.consecutive_failures += 1
+            self._record(
+                "failed",
+                f"Provisioning failed: {str(e).splitlines()[0][:150]}",
+                sandbox.id if sandbox else None,
+            )
             if sandbox:
                 sandbox.state = SandboxState.FAILED
                 sandbox.error_message = str(e)
@@ -236,6 +276,10 @@ class PoolController:
                 logger.error(
                     f"{self.consecutive_failures} provisioning failures in a row: "
                     "refilling is halted. Fix the cause and restart the controller."
+                )
+                self._record(
+                    "halted",
+                    f"{self.consecutive_failures} failures in a row, refilling stopped",
                 )
 
     def _delete_sandbox(self, sandbox_id: str) -> None:
@@ -249,6 +293,7 @@ class PoolController:
             )
             resp.raise_for_status()
             logger.info(f"Sandbox {sandbox_id}: deleted")
+            self._record("deleted", "Sandbox deleted", sandbox_id)
         except Exception as e:
             logger.warning(f"Could not delete sandbox {sandbox_id}: {e}")
 
@@ -357,9 +402,24 @@ class PoolController:
             sandbox = self.ready_queue.get_nowait()
             sandbox.state = SandboxState.ALLOCATED
             sandbox.allocated_at = datetime.now()
+            self._record(
+                "allocated", "Pulled from the pool for a new conversation", sandbox.id
+            )
             return sandbox
         except queue.Empty:
+            with self.lock:
+                self.claim_misses += 1
+            self._record(
+                "miss", "A conversation was requested but no sandbox was ready"
+            )
             return None
+
+    def abandon_claim(self, sandbox: PooledSandbox, error: Exception) -> None:
+        """Attaching failed after the sandbox left the pool: don't strand it."""
+        sandbox.state = SandboxState.FAILED
+        sandbox.error_message = str(error)
+        self._record("failed", f"Could not attach a conversation: {error}", sandbox.id)
+        self._delete_sandbox(sandbox.id)
 
     def get_pool_status(self) -> dict:
         """Get current pool status for the UI."""
@@ -368,6 +428,15 @@ class PoolController:
                 [sb.to_dict() for sb in self.all_sandboxes.values()],
                 key=lambda x: x["created_at"],
             )
+            events = list(self.events)[-50:]
+            claim_misses = self.claim_misses
+
+        def average(values: list[float]) -> float | None:
+            return sum(values) / len(values) if values else None
+
+        attach_times = [
+            sb["attach_seconds"] for sb in sandboxes_list if sb["attach_seconds"]
+        ]
         for sb in sandboxes_list:
             if sb["conversation_id"]:
                 sb["conversation_url"] = (
@@ -379,12 +448,26 @@ class PoolController:
             "threshold": self.threshold,
             "ready_count": self.ready_queue.qsize(),
             "halted": self.halted,
+            "stats": {
+                "claims": len(attach_times),
+                "claim_misses": claim_misses,
+                "avg_warmup_seconds": average(
+                    [
+                        sb["warmup_seconds"]
+                        for sb in sandboxes_list
+                        if sb["warmup_seconds"] is not None
+                    ]
+                ),
+                "avg_attach_seconds": average(attach_times),
+            },
+            "events": events,
             "sandboxes": sandboxes_list,
             "timestamp": datetime.now().isoformat(),
         }
 
     def attach_conversation(self, sandbox: PooledSandbox, message: str) -> str:
         """Attach a new conversation to the given sandbox."""
+        started = time.monotonic()
         payload = {
             "sandbox_id": sandbox.id,
             "initial_message": {
@@ -426,7 +509,19 @@ class PoolController:
             raise TimeoutError(f"Start task {task_id} did not produce conversation ID")
 
         sandbox.conversation_id = conv_id
+        sandbox.attach_seconds = time.monotonic() - started
+        idle = (
+            (sandbox.allocated_at - sandbox.ready_at).total_seconds()
+            if sandbox.allocated_at and sandbox.ready_at
+            else 0
+        )
         logger.info(f"Conversation {conv_id} attached to sandbox {sandbox.id}")
+        self._record(
+            "claimed",
+            f"Conversation {conv_id[:8]} attached in {sandbox.attach_seconds:.1f}s "
+            f"(sandbox had been warm for {idle:.0f}s)",
+            sandbox.id,
+        )
         return conv_id
 
     def shutdown(self) -> None:
@@ -440,6 +535,9 @@ class PoolController:
             ]
         logger.info(
             f"Pool controller shutting down, deleting {len(leftovers)} sandbox(es)"
+        )
+        self._record(
+            "shutdown", f"Shutting down, deleting {len(leftovers)} sandbox(es)"
         )
         for sandbox_id in leftovers:
             self._delete_sandbox(sandbox_id)
@@ -515,6 +613,7 @@ def start_conversation():
         )
     except Exception as e:
         logger.error(f"Failed to attach conversation: {e}", exc_info=True)
+        pool_controller.abandon_claim(sandbox, e)
         return jsonify({"error": str(e)}), 500
 
 

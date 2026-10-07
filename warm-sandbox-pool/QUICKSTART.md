@@ -61,7 +61,7 @@ python pool_controller.py
    - Click "🚀 Start Conversation"
 
 4. **Observe the magic**:
-   - A ready sandbox is instantly pulled from the pool
+   - A ready sandbox is pulled from the pool immediately
    - The conversation attaches to it after a few seconds, with no sandbox boot or
      Ruby install wait
    - Click the conversation link to see your agent working
@@ -226,7 +226,7 @@ warm-sandbox-pool/
 You've successfully run the demo when:
 
 ✅ Pool shows 3 sandboxes in READY state\
-✅ You can start a conversation and get instant allocation\
+✅ You can start a conversation and a warm sandbox is allocated at once\
 ✅ The conversation link opens in OpenHands\
 ✅ The agent can interact with the pre-installed quote service\
 ✅ Pool automatically provisions a replacement sandbox

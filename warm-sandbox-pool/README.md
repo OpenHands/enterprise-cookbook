@@ -1,6 +1,6 @@
 # Warm Sandbox Pool
 
-Demonstrates maintaining a pool of pre-initialized "warm" sandboxes that late-bind to conversations on demand, eliminating startup delays for end users.
+Demonstrates maintaining a pool of pre-initialized "warm" sandboxes that late-bind to conversations on demand, taking sandbox startup and initialization out of the end user's wait.
 
 **This example demonstrates a technique for deploying Ruby-based applications** using OpenHands Cloud APIs, showing that custom images are not the only viable approach for handling initialization that takes more than a few seconds.
 
@@ -8,7 +8,7 @@ Demonstrates maintaining a pool of pre-initialized "warm" sandboxes that late-bi
 
 When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies.
 
-Even when using custom images in OpenHands Enterprise, some scenarios require additional tasks to be completed on the running sandbox to make it ready for use. **If these tasks take more than a few seconds, the Warm Sandbox Pool technique eliminates the apparent delay an end-user would see** by preparing a pool of pre-initialized sandboxes that late-bind to conversations when an end-user begins to interact with the agent.
+Even when using custom images in OpenHands Enterprise, some scenarios require additional tasks to be completed on the running sandbox to make it ready for use. **If these tasks take more than a few seconds, the Warm Sandbox Pool technique removes that delay from what an end-user waits for** by preparing a pool of pre-initialized sandboxes that late-bind to conversations when an end-user begins to interact with the agent.
 
 This same approach can be used to install and prepare application services in sandboxes via API calls available in the OpenHands SaaS/Cloud platform, providing a viable alternative to custom images for your deployment needs.
 
@@ -18,7 +18,7 @@ Instead of waiting for sandbox provisioning and initialization every time a user
 
 1. **Maintains a pool** of pre-initialized sandboxes (e.g., 3 sandboxes)
 2. **Pre-installs dependencies** (Ruby, gems, application services) during sandbox preparation
-3. **Late-binds conversations** - when a user needs a sandbox, one is pulled from the pool instantly
+3. **Late-binds conversations** - when a user needs a sandbox, one is pulled from the pool with no boot or setup wait
 4. **Auto-refills** - when pool drops below threshold, new sandboxes are automatically provisioned and prepared in the background
 
 This is particularly valuable when:
@@ -100,6 +100,22 @@ Then open http://localhost:5000 in your browser.
 > If the controller is killed with SIGKILL it cannot clean up, so check your sandbox
 > list afterwards.
 
+### What to Expect (and what the pool does not speed up)
+
+The pool removes **sandbox boot plus your init script** from the user's wait. It does
+not remove the time OpenHands needs to start the conversation itself. Measured on one
+beta instance (your numbers will differ, and the web UI shows yours live):
+
+| | Time |
+|---|---|
+| Sandbox boot + init script, per pool sandbox ("warm-up", paid in the background) | about 10-25s, up to ~40s on a cold apt cache |
+| Starting a conversation cold (no `sandbox_id`), before any Ruby install | 12-26s |
+| Starting a conversation on a warm sandbox ("attach") | about 10-12s |
+
+So a cold start costs roughly *conversation start + warm-up*, and a warm start costs
+*conversation start*. The more expensive your init script, the bigger the win. For a
+cheap init script like this demo's, the saving is modest.
+
 ### What You'll See
 
 1. **Initial State**: "Preparing pool..." message while the sandboxes initialize
@@ -174,7 +190,11 @@ The `PoolController` class handles:
 
 ### Real-Time Updates
 
-The web UI uses Server-Sent Events (SSE) to stream pool state updates in real-time without polling.
+The web UI uses Server-Sent Events (SSE) to stream pool state to the browser every
+couple of seconds. Besides the sandbox cards it shows live stats (claims, average
+warm-up, average attach time), the sandboxes already claimed by conversations, and an
+activity feed of every pool event: created, ready, pulled from the pool, claimed,
+failed, deleted, refilling halted.
 
 ## Files
 
@@ -261,7 +281,7 @@ done
 echo "✅ Application ready"
 ```
 
-By pre-warming sandboxes with your application already running, agents can immediately interact with your services without the 30-60 second initialization delay on every conversation start.
+By pre-warming sandboxes with your application already running, agents can use your services as soon as the conversation starts, without waiting for sandbox boot and initialization (tens of seconds for this demo, more for heavier setups) on every conversation.
 
 ## Benefits vs. Custom Images
 

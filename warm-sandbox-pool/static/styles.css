@@ -113,6 +113,101 @@ header .subtitle {
     color: var(--success-color);
 }
 
+.stats-note {
+    margin: -8px 0 20px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.section-title {
+    font-size: 1rem;
+    margin: 0 0 8px;
+    color: var(--text-primary);
+}
+
+.empty-note {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-align: center;
+    padding: 8px;
+}
+
+/* Claimed sandboxes */
+.claimed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.claimed-row {
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 6px;
+    font-size: 0.875rem;
+}
+
+.claimed-row .conversation-link {
+    margin: 0 0 0 8px;
+}
+
+.claimed-timing {
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Activity feed */
+.activity-panel {
+    margin-bottom: 20px;
+}
+
+.event-log {
+    max-height: 320px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+}
+
+.event-row {
+    display: grid;
+    grid-template-columns: 70px 28px 140px 1fr;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.event-time,
+.event-sandbox {
+    color: var(--text-secondary);
+}
+
+.event-kind-claimed .event-message {
+    color: var(--success-color);
+    font-weight: bold;
+}
+
+.event-kind-failed .event-message,
+.event-kind-halted .event-message,
+.event-kind-miss .event-message {
+    color: var(--danger-color);
+}
+
+.refill-notice {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    background: #fef3c7;
+    font-size: 0.875rem;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* Sandbox List */
 .sandbox-list {
     display: flex;

@@ -2,7 +2,10 @@
 
 class PoolUI {
     constructor() {
-        this.poolReady = false;
+        this.everReady = false;
+        this.readyCount = 0;
+        this.requestInFlight = false;
+        this.lastEventSeq = 0;
         this.eventSource = null;
         this.initialize();
     }
@@ -38,22 +41,84 @@ class PoolUI {
         document.getElementById('ready-count').textContent = poolStatus.ready_count;
         document.getElementById('threshold').textContent = poolStatus.threshold;
 
-        // Update sandbox list
-        this.renderSandboxes(poolStatus.sandboxes);
+        const allocated = poolStatus.sandboxes.filter(sb => sb.state === 'ALLOCATED');
+        this.renderSandboxes(poolStatus.sandboxes.filter(sb => sb.state !== 'ALLOCATED'));
+        this.renderClaimed(allocated);
+        this.renderStats(poolStatus.stats);
+        this.renderEvents(poolStatus.events);
 
         document.getElementById('halted-notice').style.display =
             poolStatus.halted ? 'block' : 'none';
 
-        // Check if pool is ready
-        const wasReady = this.poolReady;
-        this.poolReady = poolStatus.ready_count > 0;
-
-        // Toggle conversation interface visibility
-        if (this.poolReady && !wasReady) {
+        // Once the pool has been ready, keep the form visible: an empty pool
+        // between claim and refill is the interesting moment, not a reset.
+        this.readyCount = poolStatus.ready_count;
+        if (this.readyCount > 0 && !this.everReady) {
+            this.everReady = true;
             this.showConversationInterface();
-        } else if (!this.poolReady && wasReady) {
-            this.hideConversationInterface();
         }
+        const refilling = this.everReady && this.readyCount === 0 && !poolStatus.halted;
+        document.getElementById('refill-notice').style.display = refilling ? 'block' : 'none';
+        document.getElementById('ready-info').style.display = refilling ? 'none' : 'block';
+        this.syncStartButton();
+    }
+
+    syncStartButton() {
+        const button = document.getElementById('start-btn');
+        button.disabled = this.requestInFlight || this.readyCount === 0;
+    }
+
+    formatSeconds(value, digits = 0) {
+        return value === null || value === undefined ? '-' : `${value.toFixed(digits)}s`;
+    }
+
+    renderStats(stats) {
+        document.getElementById('claim-count').textContent = stats.claims;
+        document.getElementById('avg-warmup').textContent =
+            this.formatSeconds(stats.avg_warmup_seconds);
+        document.getElementById('avg-attach').textContent =
+            this.formatSeconds(stats.avg_attach_seconds, 1);
+    }
+
+    renderClaimed(sandboxes) {
+        const container = document.getElementById('claimed-list');
+        if (sandboxes.length === 0) {
+            container.innerHTML = '<p class="empty-note">Nothing claimed yet.</p>';
+            return;
+        }
+        container.innerHTML = sandboxes.slice().reverse().map(sb => {
+            const link = sb.conversation_url
+                ? `<a href="${this.escapeHtml(sb.conversation_url)}" target="_blank" class="conversation-link">🔗 Conversation</a>`
+                : '<span class="conversation-link">attaching...</span>';
+            return `
+                <div class="claimed-row">
+                    <code>${this.shortId(sb.id)}</code>${link}
+                    <div class="claimed-timing">
+                        warm ${this.formatSeconds(sb.warmup_seconds)} ·
+                        waited in pool ${this.formatSeconds(sb.idle_seconds)} ·
+                        attach ${this.formatSeconds(sb.attach_seconds, 1)}
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    renderEvents(events) {
+        const last = events.length ? events[events.length - 1].seq : 0;
+        if (last === this.lastEventSeq) return;
+        this.lastEventSeq = last;
+
+        const emojis = {
+            created: '➕', preparing: '🛠️', ready: '🟢', allocated: '🟦',
+            claimed: '✅', failed: '⚠️', deleted: '🗑️', halted: '⛔',
+            miss: '🙅', shutdown: '🛑'
+        };
+        document.getElementById('event-log').innerHTML = events.slice().reverse().map(e => `
+            <div class="event-row event-kind-${this.escapeHtml(e.kind)}">
+                <span class="event-time">${this.escapeHtml(e.timestamp.substring(11, 19))}</span>
+                <span>${emojis[e.kind] || '•'}</span>
+                <span class="event-sandbox">${e.sandbox_id ? this.shortId(e.sandbox_id) : ''}</span>
+                <span class="event-message">${this.escapeHtml(e.message)}</span>
+            </div>`).join('');
     }
 
     renderSandboxes(sandboxes) {
@@ -147,11 +212,6 @@ class PoolUI {
         document.getElementById('ready-state').style.display = 'block';
     }
 
-    hideConversationInterface() {
-        document.getElementById('waiting-state').style.display = 'block';
-        document.getElementById('ready-state').style.display = 'none';
-    }
-
     setupConversationForm() {
         const form = document.getElementById('message-input');
         const button = document.getElementById('start-btn');
@@ -168,13 +228,8 @@ class PoolUI {
                 return;
             }
 
-            if (!this.poolReady) {
-                alert('Pool is not ready yet. Please wait for at least one sandbox to be ready.');
-                return;
-            }
-
-            // Disable button during request
-            button.disabled = true;
+            this.requestInFlight = true;
+            this.syncStartButton();
             button.textContent = '⏳ Starting...';
 
             try {
@@ -202,7 +257,8 @@ class PoolUI {
                 console.error('Error starting conversation:', error);
                 this.showResult({ error: error.message }, true);
             } finally {
-                button.disabled = false;
+                this.requestInFlight = false;
+                this.syncStartButton();
                 button.textContent = '🚀 Start Conversation';
             }
         });

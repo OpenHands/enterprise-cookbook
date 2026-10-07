@@ -32,8 +32,34 @@
                     </div>
                 </div>
 
+                <div class="pool-stats" id="claim-stats">
+                    <div class="stat">
+                        <span class="stat-label">Claims:</span>
+                        <span class="stat-value" id="claim-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg warm-up:</span>
+                        <span class="stat-value" id="avg-warmup">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg attach:</span>
+                        <span class="stat-value" id="avg-attach">-</span>
+                    </div>
+                </div>
+                <p class="stats-note">
+                    <strong>Warm-up</strong> is the sandbox boot plus init script that a cold
+                    start would add to each conversation's wait. <strong>Attach</strong> is the
+                    conversation start itself, which happens either way.
+                </p>
+
+                <h3 class="section-title">In the pool</h3>
                 <div id="sandbox-list" class="sandbox-list">
                     <!-- Sandbox cards will be inserted here -->
+                </div>
+
+                <h3 class="section-title">Claimed by conversations</h3>
+                <div id="claimed-list" class="claimed-list">
+                    <p class="empty-note">Nothing claimed yet.</p>
                 </div>
 
                 <div class="pool-legend">
@@ -65,21 +91,27 @@
             <div class="panel conversation-panel">
                 <h2>💬 Start a Conversation</h2>
 
+                <p id="halted-notice" class="error-message" style="display: none;">
+                    ❌ Provisioning failed repeatedly, so refilling has stopped. See the
+                    controller's terminal output, fix the cause, and restart it.
+                </p>
+
                 <div id="waiting-state" class="waiting-state">
                     <div class="spinner"></div>
                     <p>Preparing sandbox pool...</p>
                     <p class="waiting-subtext">This usually takes under a minute on first start</p>
-                    <p id="halted-notice" class="error-message" style="display: none;">
-                        ❌ Provisioning failed repeatedly, so refilling has stopped. See the
-                        controller's terminal output, fix the cause, and restart it.
-                    </p>
                 </div>
 
                 <div id="ready-state" class="ready-state" style="display: none;">
-                    <div class="info-box">
+                    <div class="info-box" id="ready-info">
                         <p><strong>✨ Pool is ready!</strong></p>
-                        <p>Type a message below to start an OpenHands conversation. A pre-warmed sandbox with Ruby and Sinatra already installed will be allocated instantly.</p>
+                        <p>Type a message below to start an OpenHands conversation. A pre-warmed sandbox with Ruby and Sinatra already installed will be allocated to your conversation right away.</p>
                     </div>
+
+                    <p id="refill-notice" class="refill-notice" style="display: none;">
+                        ⏳ No warm sandbox is ready right now. The pool is refilling and you
+                        can start the next conversation as soon as one turns green.
+                    </p>
 
                     <div class="conversation-form">
                         <label for="message-input">Your message to the agent:</label>
@@ -101,7 +133,7 @@
 
                 <div class="info-section">
                     <h3>About This Demo</h3>
-                    <p>This demonstrates the <strong>Warm Sandbox Pool</strong> technique for eliminating initialization delays when using OpenHands agents.</p>
+                    <p>This demonstrates the <strong>Warm Sandbox Pool</strong> technique for taking sandbox startup and initialization out of the wait when using OpenHands agents.</p>
 
                     <h4>What's Pre-Installed:</h4>
                     <ul>
@@ -122,6 +154,13 @@
                         <strong>💡 For Custom Applications:</strong> Replace the demo Sinatra service in <code>sandbox_prep/init_ruby_service.sh</code> with your actual application initialization commands.
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="panel activity-panel">
+            <h2>📜 Live Activity</h2>
+            <div id="event-log" class="event-log">
+                <p class="empty-note">Waiting for activity...</p>
             </div>
         </div>
     </div>
