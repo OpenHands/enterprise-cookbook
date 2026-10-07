@@ -1,5 +1,5 @@
 ---
 title: Command Whitelist
-description: Only allow approved shell commands with PreToolUse hooks (whitelist approach for strict security).
+description: Allow only approved shell commands with PreToolUse hooks (whitelist approach for strict security).
 category: Guardrails
-icon: shield-check
+icon: user-shield
