@@ -4,7 +4,8 @@ Demonstrates maintaining a pool of pre-initialized "warm" sandboxes that late-bi
 
 **This example demonstrates a technique for deploying Ruby-based applications** using OpenHands Cloud APIs, showing that custom images are not the only viable approach for handling initialization that takes more than a few seconds.
 
-## Context: Alternative to Custom Images
+<details>
+<summary>Context: Alternative to Custom Images</summary>
 
 When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies.
 
@@ -12,7 +13,9 @@ Even when using custom images in OpenHands Enterprise, some scenarios require ad
 
 This same approach can be used to install and prepare application services in sandboxes via API calls available in the OpenHands SaaS/Cloud platform, providing a viable alternative to custom images for your deployment needs.
 
-## Concept
+</details>
+
+## How It Works
 
 Instead of waiting for sandbox provisioning and initialization every time a user starts a conversation, this approach:
 
@@ -27,51 +30,28 @@ This is particularly valuable when:
 - You need services running and ready before the agent starts working
 - You're using the OpenHands SaaS/Cloud platform without custom images
 
-## Architecture
+### Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Web UI                              │
-├──────────────────────────┬──────────────────────────────────┤
-│   Pool Visualization     │    Conversation Interface        │
-│                          │                                  │
-│  🟢 Sandbox 1: READY     │  [Waiting for pool to be ready]  │
-│  🟡 Sandbox 2: PREPARING │                                  │
-│  🔴 Sandbox 3: STARTING  │  [Then: conversation input box]  │
-└──────────────────────────┴──────────────────────────────────┘
-                           │
-                           ▼
-              ┌────────────────────────┐
-              │   Pool Controller      │
-              │   (Flask Backend)      │
-              └────────────────────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-        ▼                  ▼                  ▼
-  ┌──────────┐      ┌──────────┐      ┌──────────┐
-  │ Sandbox  │      │ Sandbox  │      │ Sandbox  │
-  │ (READY)  │      │ (READY)  │      │ (READY)  │
-  └──────────┘      └──────────┘      └──────────┘
-       │                 │                 │
-       └─────────────────┴─────────────────┘
-                         │
-              Each sandbox has Ruby +
-              Sinatra gem + demo service
+```mermaid
+flowchart TD
+    subgraph UI["Web UI"]
+        PV["Pool Visualization<br/>🟢 Sandbox 1: READY<br/>🟡 Sandbox 2: PREPARING<br/>🔴 Sandbox 3: STARTING"]
+        CI["Conversation Interface<br/>[Waiting for pool to be ready]<br/>[Then: conversation input box]"]
+    end
+    UI --> PC["Pool Controller<br/>(Flask Backend)"]
+    PC --> S1["Sandbox<br/>(READY)"]
+    PC --> S2["Sandbox<br/>(READY)"]
+    PC --> S3["Sandbox<br/>(READY)"]
+    S1 & S2 & S3 --- N["Each sandbox has Ruby +<br/>Sinatra gem + demo service"]
 ```
 
-## Demo Application: Ruby Sinatra Service
-
-This example installs a Ruby/Sinatra web service in each sandbox to demonstrate the warm pool technique in a realistic scenario. **The Sinatra service demonstrates how Ruby-based systems** can be installed and running before agent conversations begin.
-
-The initialization process (installing Ruby runtime, gems, starting the service) shows how to deploy application services using the same API-driven preparation approach for your specific use case.
-
-## Quick Start
-
-### Prerequisites
+## Prerequisites
 
 - Python 3.10+
 - OpenHands Cloud API key (`OH_API_KEY`)
 - `uv` or standard Python environment
+
+## Run It
 
 ### Installation
 
@@ -82,6 +62,8 @@ uv pip install -e .
 # Or with pip
 pip install -r requirements.txt
 ```
+
+<!-- docs:tabs -->
 
 ### Run the Demo
 
@@ -94,6 +76,7 @@ Then open http://localhost:12000 in your browser. The controller prints a random
 **access code** when it starts (look for `ACCESS CODE:` in its output). Paste it into
 the page to sign in. Nothing is served without it, and a restart issues a new code.
 
+> [!WARNING]
 > **Heads up: this creates real sandboxes.** The controller immediately starts
 > `POOL_SIZE` sandboxes (default 3) and keeps topping the pool up as you use them.
 > Keep the defaults (pool of 3, threshold 2): a smaller pool leaves nothing to watch,
@@ -137,6 +120,7 @@ Steps for the agent (or for you, in a sandbox terminal):
 This was verified through a real work URL: sign-in, the page, the live stream, and
 starting a conversation all work through the proxy.
 
+> [!WARNING]
 > **Security: what the access code does and does not protect.** A work URL is reachable
 > by anyone who has it, so the controller gates **everything** (the page, the status
 > API, the live stream, and Start Conversation) behind a random one-time access code.
@@ -158,6 +142,8 @@ starting a conversation all work through the proxy.
 > - This is a demo gate, not a production login: there are no user accounts and no
 >   rate limiting on guesses. For anything longer-lived, put real authentication in
 >   front of it.
+
+<!-- /docs:tabs -->
 
 ### What to Expect (and what the pool does not speed up)
 
@@ -214,9 +200,15 @@ Once a sandbox is in READY state, the Sinatra service is listening on port 4567
 **inside** the sandbox. That port is not exposed publicly, so reach it from the
 sandbox itself. The easiest way is to start a conversation and ask the agent:
 
-```
+```text
 "Call the quote service running on localhost:4567 and show me today's quote"
 ```
+
+## Demo Application: Ruby Sinatra Service
+
+This example installs a Ruby/Sinatra web service in each sandbox to demonstrate the warm pool technique in a realistic scenario. **The Sinatra service demonstrates how Ruby-based systems** can be installed and running before agent conversations begin.
+
+The initialization process (installing Ruby runtime, gems, starting the service) shows how to deploy application services using the same API-driven preparation approach for your specific use case.
 
 ## Implementation Details
 
@@ -259,7 +251,7 @@ failed, deleted, refilling halted.
 
 ## Files
 
-```
+```text
 warm-sandbox-pool/
 ├── README.md                          # This file
 ├── QUICKSTART.md                      # Short run-it-now guide
@@ -444,11 +436,15 @@ Reduce `POOL_SIZE` or implement smarter pool management:
 4. **Dynamic Scaling**: Adjust pool size based on demand
 5. **Cost Optimization**: Implement sandbox recycling (reset instead of destroy)
 
-## Related Examples
+## Related
 
-- `start-sandbox/` - Basic sandbox provisioning
-- `clone-and-attach/` - Conversation attachment patterns
-- `upload-skills/` - Pre-loading agent skills
+<!-- docs:cards -->
+
+- [`start-sandbox`](../start-sandbox/) - Basic sandbox provisioning
+- [`clone-and-attach`](../clone-and-attach/) - Conversation attachment patterns
+- [`upload-skills`](../upload-skills/) - Pre-loading agent skills
+
+<!-- /docs:cards -->
 
 ## License
 
