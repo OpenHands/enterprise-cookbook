@@ -2,12 +2,16 @@
 
 Demonstrates maintaining a pool of pre-initialized "warm" sandboxes that late-bind to conversations on demand, taking sandbox startup and initialization out of the end user's wait.
 
-**This example demonstrates a technique for deploying Ruby-based applications** using OpenHands Cloud APIs, showing that custom images are not the only viable approach for handling initialization that takes more than a few seconds.
+**This example demonstrates a technique for any situation where expensive setup must finish before an agent can start working**, using OpenHands Cloud APIs. It shows that custom images are not the only viable approach for handling initialization that takes more than a few seconds, and it can also be combined with custom images.
 
 <details>
 <summary>Context: Alternative to Custom Images</summary>
 
-When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies.
+When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies. A custom image may not be possible, or may not fully address the situation:
+
+- Custom images are not supported on OpenHands SaaS/Cloud.
+- The required setup may change over a shorter period than is practical for rebuilding the image.
+- A significant part of the setup may vary so much by task that an image for each variation is impractical.
 
 Even when using custom images in OpenHands Enterprise, some scenarios require additional tasks to be completed on the running sandbox to make it ready for use. **If these tasks take more than a few seconds, the Warm Sandbox Pool technique removes that delay from what an end-user waits for** by preparing a pool of pre-initialized sandboxes that late-bind to conversations when an end-user begins to interact with the agent.
 
@@ -206,7 +210,7 @@ sandbox itself. The easiest way is to start a conversation and ask the agent:
 
 ## Demo Application: Ruby Sinatra Service
 
-This example installs a Ruby/Sinatra web service in each sandbox to demonstrate the warm pool technique in a realistic scenario. **The Sinatra service demonstrates how Ruby-based systems** can be installed and running before agent conversations begin.
+This example installs a Ruby/Sinatra web service in each sandbox to demonstrate the warm pool technique in a realistic scenario. **The Ruby service is only an example:** any long-running startup job can be installed and running before agent conversations begin, such as cloning a very large monorepo or downloading the Maven dependencies of a Java monorepo with many projects.
 
 The initialization process (installing Ruby runtime, gems, starting the service) shows how to deploy application services using the same API-driven preparation approach for your specific use case.
 
@@ -294,7 +298,7 @@ redis-server --daemonize yes
 
 ### 3. Large Codebases
 
-Clone and prepare large repositories with dependencies:
+Clone and prepare large repositories with dependencies, such as a very large monorepo or a Java monorepo with heavy Maven dependencies:
 
 ```bash
 # In init script
