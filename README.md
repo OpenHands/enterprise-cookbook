@@ -26,6 +26,7 @@ Create, attach to, and tear down sandboxes (runtimes).
 | [start-sandbox](./start-sandbox/) | Start a sandbox (no conversation) and run commands via the agent-server REST API |
 | [clone-and-attach](./clone-and-attach/) | Clone a repo + run `.openhands/setup.sh` in a sandbox, then attach a conversation to it |
 | [archive-sandbox](./archive-sandbox/) | Archive/delete a conversation to release its **Persistent Volume Claim (PVC)** and free up storage resources |
+| [warm-sandbox-pool](./warm-sandbox-pool/) | Keep a pool of pre-initialized "warm" sandboxes that late-bind to conversations on demand, taking sandbox startup and initialization out of the end user's wait |
 
 ### Conversation monitoring & reacting
 

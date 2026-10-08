@@ -1,0 +1,5 @@
+---
+title: Warm Sandbox Pool
+description: Keep a pool of pre-initialized sandboxes warm and attach conversations to them on demand.
+category: Sandbox lifecycle
+icon: fire
