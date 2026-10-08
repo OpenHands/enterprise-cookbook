@@ -7,15 +7,16 @@ Demonstrates maintaining a pool of pre-initialized "warm" sandboxes that late-bi
 <details>
 <summary>Context: Alternative to Custom Images</summary>
 
-When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies. A custom image may not be possible, or may not fully address the situation:
+When applications have components that run outside the agent control loop and must be available on the system where the agent is running, a custom image is not the only mechanism for packaging these dependencies.
 
-- Custom images are not supported on OpenHands SaaS/Cloud.
+Although OpenHands Enterprise has robust support for [custom sandbox images](https://docs.openhands.dev/enterprise/custom-sandbox-images), custom images are not yet supported on OpenHands SaaS. Where they are supported, a custom image may still not fully address the situation:
+
 - The required setup may change over a shorter period than is practical for rebuilding the image.
 - A significant part of the setup may vary so much by task that an image for each variation is impractical.
 
 Even when using custom images in OpenHands Enterprise, some scenarios require additional tasks to be completed on the running sandbox to make it ready for use. **If these tasks take more than a few seconds, the Warm Sandbox Pool technique removes that delay from what an end-user waits for** by preparing a pool of pre-initialized sandboxes that late-bind to conversations when an end-user begins to interact with the agent.
 
-This same approach can be used to install and prepare application services in sandboxes via API calls available in the OpenHands SaaS/Cloud platform, providing a viable alternative to custom images for your deployment needs.
+This same approach can be used to install and prepare application services in sandboxes via API calls available in OpenHands SaaS, providing a viable alternative to custom images for your deployment needs.
 
 </details>
 
@@ -32,7 +33,7 @@ This is particularly valuable when:
 - Setup tasks take more than a few seconds (installing Ruby, gems, starting services)
 - You want consistent, fast conversation startup times
 - You need services running and ready before the agent starts working
-- You're using the OpenHands SaaS/Cloud platform without custom images
+- You're using OpenHands SaaS, where custom images are not yet supported
 
 ### Architecture
 
@@ -349,7 +350,7 @@ By pre-warming sandboxes with your application already running, agents can use y
 | **Just-in-Time Init** | Simplest code, minimal resources | Slow user experience, wait time on every conversation |
 
 **Warm Sandbox Pool is ideal when**:
-- You're on OpenHands SaaS/Cloud (custom images not available)
+- You're on OpenHands SaaS (custom images not yet supported)
 - Setup time is 10-60 seconds (too slow for UX, too fast to justify custom image complexity)
 - You want flexibility to change initialization without rebuilding images
 - You have predictable conversation volume
