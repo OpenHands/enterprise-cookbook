@@ -74,7 +74,9 @@ def format_report(city: dict, forecast: dict) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description="Print the current weather and forecast for a city."
+    )
     parser.add_argument("city", nargs="+", help="City name, e.g. Tokyo")
     city_name = " ".join(parser.parse_args().city)
 
