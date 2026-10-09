@@ -59,6 +59,7 @@ Extend conversations with plugins, skills, and MCP servers.
 |---------|-------------|
 | [load-plugin](./load-plugin/) | Minimal: start a conversation with a plugin pre-loaded via the REST API |
 | [launch-plugin-badge](./launch-plugin-badge/) | Build a no-code `/launch` link, HTML button, or README badge that loads a plugin |
+| [plugin-with-script](./plugin-with-script/) | Bundle a **script** in a plugin and have its command and skill tell the agent to run it, with paths that resolve wherever the plugin is fetched |
 | [upload-skills](./upload-skills/) | Upload a local agent-skills directory into a sandbox, then start a conversation that uses them |
 | [test-mcp-config](./test-mcp-config/) | Validate **MCP server configs** (connection/auth) against a sandbox's agent-server via `POST /api/mcp/test`, before using them in a conversation |
 | [per-conversation-secrets](./per-conversation-secrets/) | Template an **MCP server** config (`.mcp.json`) bundled in a plugin using per-conversation secrets injected via REST API (also listed under Secrets & authentication) |

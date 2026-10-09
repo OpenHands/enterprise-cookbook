@@ -1,0 +1,23 @@
+{
+  "name": "city-weather",
+  "version": "1.0.0",
+  "description": "Get the current weather and a 4-hour precipitation forecast for any city by running a bundled Python script.",
+  "license": "MIT",
+  "keywords": ["weather", "forecast", "script", "example", "demo"],
+  "parameters": {
+    "city": {
+      "type": "string",
+      "description": "The city to report the weather for",
+      "required": false,
+      "default": "Tokyo"
+    }
+  },
+  "entry_command": "now",
+  "examples": [
+    {
+      "title": "Weather in Tokyo",
+      "prompt": "/city-weather:now Tokyo",
+      "parameters": { "city": "Tokyo" }
+    }
+  ]
+}

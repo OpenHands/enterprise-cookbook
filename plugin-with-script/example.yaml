@@ -1,0 +1,5 @@
+---
+title: Plugin With Script
+description: Bundle a script in a plugin and have its command and skill tell the agent to run it.
+category: Plugins, skills & MCP
+icon: file-code
