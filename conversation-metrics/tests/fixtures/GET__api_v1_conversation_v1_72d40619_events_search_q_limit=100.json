@@ -78,11 +78,11 @@
                 "default": {
                   "url": "https://app.all-hands.dev/mcp/mcp",
                   "headers": {
-                    "X-Session-API-Key": "qM2bN6biVI6EkvPefOMhJORacNHyiI0k"
+                    "X-Session-API-Key": "REDACTED"
                   }
                 },
                 "tavily": {
-                  "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=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"
+                  "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=REDACTED"
                 },
                 "sse_aba73a3a": {
                   "url": "https://mcp.atlassian.com/v1/sse",
