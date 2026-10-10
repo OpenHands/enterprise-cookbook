@@ -1,0 +1,32 @@
+{
+  "id": "dadjokes.groan",
+  "name": "Dad Jokes",
+  "version": "1.1.0",
+  "publisher": "dadjokes",
+  "description": "Because every coding session needs more groaning. 🙄",
+  "engines": { "agentCanvas": "^1.0.0" },
+  "main": "main.js",
+  "activationEvents": ["onCommand:dadjokes.random", "onCommand:dadjokes.encourage"],
+  "capabilities": ["conversation:read", "storage"],
+  "contributes": {
+    "pages": [
+      {
+        "id": "jokes",
+        "title": "Dad Jokes",
+        "icon": "icon.svg",
+        "page": "panel.html"
+      }
+    ],
+    "commands": [
+      { "command": "dadjokes.random", "title": "🤣 Tell me a Dad Joke" },
+      { "command": "dadjokes.encourage", "title": "👴 Words of Wisdom" }
+    ],
+    "menus": {
+      "conversationTabs/context": [{ "command": "dadjokes.random" }],
+      "chatInput/actions": [{ "command": "dadjokes.encourage" }]
+    },
+    "settingsPages": [
+      { "id": "preferences", "title": "Dad Jokes", "page": "settings.html" }
+    ]
+  }
+}
