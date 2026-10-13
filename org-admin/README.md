@@ -158,6 +158,6 @@ If it returns nothing, run the ordering from migration `138` to see who would be
 
 <!-- docs:cards -->
 
-- [`service-account-github-pat`](../service-account-github-pat/) - Another identity pattern, using one account as a service account
+- [`provision-users`](../provision-users/) - Script the same org and user provisioning from your own system, including idempotent re-runs and API key reissue
 
 <!-- /docs:cards -->
