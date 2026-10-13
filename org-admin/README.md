@@ -32,7 +32,7 @@ Every instance should already have a super admin. Migration `138` promotes the o
 - An OHE install, and an API key for a user. Create one in the app under **Settings > API Keys**.
 - To **list** super admins through the API, one of:
   - the key belongs to a super admin, or
-  - **Enable OEM User Creation Flow** is on in the Replicated admin console. It sets `USER_PROVISIONING_ENABLED`, which lets any signed-in user list super admins.
+  - **Enable OEM User Creation Flow** is on in the Replicated admin console. It sets `USER_PROVISIONING_ENABLED`, which lets any signed-in user list super admins on OHE **1.62.0 or later**. Earlier versions return 403 to everyone but super admins, even with the toggle on.
 - To **grant** the role or **create orgs**, the key must belong to a super admin.
 - `pip install requests`
 
