@@ -177,6 +177,8 @@ The endpoint is registered only when the operator turns it on. Both install type
 | Replicated VM | Admin console → Config → Advanced Options | Check **Enable OEM User Creation Flow**, then save the config and deploy the new version |
 | Helm | Your `values.yaml` | `userProvisioning.enabled: true` |
 
+![The Enable OEM User Creation Flow checkbox under Advanced Options in the admin console Config tab](./enable-oem-user-creation-flow.png)
+
 When it is disabled, `POST /api/organizations/provision-user` returns `404`. Org creation and superadmin management are always available.
 
 ## Troubleshooting
