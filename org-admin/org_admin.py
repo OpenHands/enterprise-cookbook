@@ -25,7 +25,7 @@ SUPER_ADMIN_HINT = """\
 Listing super admins is restricted to super admins by default. Either:
   - run this tool with an API key that belongs to a super admin, or
   - on OHE 1.62.0 or later, enable "Enable OEM User Creation Flow" in the
-    Replicated admin console (sets USER_PROVISIONING_ENABLED, which lets any
+    admin console (sets USER_PROVISIONING_ENABLED, which lets any
     signed-in user list them), or
   - ask the database (see README.md, "Find the Super Admin Without the API")."""
 

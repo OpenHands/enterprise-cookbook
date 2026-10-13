@@ -2,6 +2,9 @@
 
 Every OpenHands Enterprise (OHE) user has a personal organization, and an install that predates organizations has only those. Creating a team org, and putting people in it, is an instance-level action that only a **super admin** can take. This example is a small command-line tool for those steps, with the reasons behind each one.
 
+> [!NOTE]
+> For how personal organizations, team organizations, and super admins work, see the [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview). For what the VM install and Kubernetes (Helm) settings do, see [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations).
+
 ## How It Works
 
 A super admin is a user whose instance-level role is `admin`. It is separate from the `owner`, `admin` and `member` roles inside an org. It carries the permissions to create orgs, invite people into orgs it is not a member of, and grant or revoke the role itself.
@@ -125,12 +128,14 @@ The endpoint is registered only when the operator turns it on. Both install type
 
 | Install type | Where | Setting |
 |---|---|---|
-| Replicated VM | Admin console → Config → Advanced Options | Check **Enable OEM User Creation Flow**, then save the config and deploy the new version |
-| Helm | Your `values.yaml` | `userProvisioning.enabled: true` |
+| VM install | Admin console → Config → Advanced Options | Check **Enable OEM User Creation Flow**, then save the config and deploy the new version |
+| Kubernetes (Helm) | Your `values.yaml` | `userProvisioning.enabled: true` |
 
 ![The Enable OEM User Creation Flow checkbox under Advanced Options in the admin console Config tab](./enable-oem-user-creation-flow.png)
 
 When it is disabled, `POST /api/organizations/provision-user` returns `404`. Org creation and superadmin management are always available.
+
+For what this setting does across the installation, see [User Provisioning](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations#user-provisioning).
 
 ## Find the Super Admin Without the API
 
@@ -169,6 +174,8 @@ If it returns nothing, run the ordering from migration `138` to see who would be
 
 <!-- docs:cards -->
 
+- [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview) - Personal and team organizations, the current organization, super admins, and the default organization
+- [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations) - What the VM install and Kubernetes (Helm) settings do, and how to migrate an existing installation
 - [`provision-users`](../provision-users/) - Script the same org and user provisioning from your own system, including idempotent re-runs and API key reissue
 
 <!-- /docs:cards -->
