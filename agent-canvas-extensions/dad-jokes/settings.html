@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none';"
+    />
+    <title>Dad Jokes Settings</title>
+    <style>
+      /*
+       * AgentCanvas Theme Integration
+       *
+       * Theme variables (--oh-*, --cool-grey-*) are injected by the host via postMessage.
+       * Extensions should use these variables for styling to match the AgentCanvas theme.
+       *
+       * Fallback values are provided for local development/preview outside AgentCanvas.
+       */
+      :root {
+        /* Fallback values for development - these will be overridden by host theme */
+        --cool-grey-50: #F7F9FC;
+        --cool-grey-100: #EEF2F7;
+        --cool-grey-300: #C3CDDC;
+        --cool-grey-400: #A3B0C4;
+        --cool-grey-500: #7E8A9E;
+        --cool-grey-700: #4B5468;
+        --cool-grey-800: #383F50;
+        --cool-grey-900: #2C313F;
+        --cool-grey-925: #21252F;
+        --cool-grey-950: #0B0E14;
+        --oh-background: #0B0E14;
+        --oh-foreground: #EEF2F7;
+        --oh-surface: #21252F;
+        --oh-surface-raised: #2C313F;
+        --oh-border: #4B5468;
+        --oh-border-subtle: #383F50;
+        --oh-text-secondary: #C3CDDC;
+        --oh-text-dim: #7E8A9E;
+        --oh-muted: #A3B0C4;
+        --oh-color-primary: #c9b974;
+        --oh-color-success: #a5e75e;
+        --oh-color-danger: #e76a5e;
+        --oh-radius: 8px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html, body {
+        /* Use theme variable - will be set by host */
+        background-color: var(--oh-background);
+      }
+
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        margin: 0;
+        padding: 24px;
+        color: var(--oh-foreground);
+        line-height: 1.5;
+      }
+
+      h1 {
+        margin: 0 0 4px 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .subtitle {
+        color: var(--oh-text-secondary);
+        margin-bottom: 24px;
+        font-size: 14px;
+      }
+
+      /* Form field container */
+      .field {
+        margin-bottom: 16px;
+      }
+
+      .field label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        color: var(--oh-foreground);
+      }
+
+      /* Text inputs - matching formControlSettingsFieldClassName */
+      input[type="text"] {
+        width: 100%;
+        height: 36px;
+        padding: 0 12px;
+        border-radius: var(--oh-radius);
+        border: 1px solid var(--oh-border);
+        background: var(--cool-grey-925);
+        color: #ffffff;
+        font-size: 14px;
+        transition: border-color 75ms, box-shadow 75ms;
+      }
+
+      input[type="text"]::placeholder {
+        color: var(--oh-text-dim);
+        font-style: italic;
+      }
+
+      input[type="text"]:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.4);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+      }
+
+      /* Section dividers */
+      .section {
+        margin-bottom: 32px;
+      }
+
+      .section-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--oh-foreground);
+        margin: 0 0 16px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Checkbox styling */
+      .checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+      }
+
+      .checkbox-item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--oh-primary);
+        cursor: pointer;
+      }
+
+      .checkbox-item span {
+        font-size: 14px;
+        color: var(--oh-foreground);
+      }
+
+      /* Button row */
+      .btn-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      /* Buttons - matching AgentCanvas button styles */
+      button {
+        height: 36px;
+        padding: 0 16px;
+        border-radius: var(--oh-radius);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 75ms, border-color 75ms, opacity 75ms;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .btn-primary {
+        background: var(--oh-primary);
+        color: var(--cool-grey-950);
+        border: none;
+      }
+
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+
+      .btn-secondary {
+        background: var(--cool-grey-800);
+        color: var(--oh-foreground);
+        border: 1px solid var(--oh-border);
+      }
+
+      .btn-secondary:hover {
+        background: var(--cool-grey-700);
+      }
+
+      .btn-danger {
+        background: transparent;
+        color: var(--oh-danger);
+        border: 1px solid var(--oh-danger);
+      }
+
+      .btn-danger:hover {
+        background: rgba(231, 106, 94, 0.1);
+      }
+
+      /* Status messages */
+      #status {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: var(--oh-radius);
+        font-size: 13px;
+        display: none;
+      }
+
+      #status.success {
+        display: block;
+        background: rgba(165, 231, 94, 0.1);
+        color: var(--oh-success);
+        border: 1px solid rgba(165, 231, 94, 0.3);
+      }
+
+      #status.error {
+        display: block;
+        background: rgba(231, 106, 94, 0.1);
+        color: var(--oh-danger);
+        border: 1px solid rgba(231, 106, 94, 0.3);
+      }
+
+      /* Stats cards */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .stat-card {
+        background: var(--cool-grey-925);
+        border: 1px solid var(--oh-border-subtle);
+        border-radius: var(--oh-radius);
+        padding: 16px;
+        text-align: center;
+      }
+
+      .stat-value {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--oh-primary);
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: var(--oh-muted);
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>👴 Dad Jokes Settings</h1>
+    <p class="subtitle">Configure your premium dad humor experience</p>
+
+    <div class="section">
+      <h3 class="section-title">🎭 Personalization</h3>
+      <div class="field">
+        <label for="dadName">Your Dad Name</label>
+        <input type="text" id="dadName" placeholder="e.g., Papa, Pop, Old Man, Father Unit" />
+      </div>
+      <div class="field">
+        <label for="victimName">Victim's Name (optional)</label>
+        <input type="text" id="victimName" placeholder="e.g., Sport, Champ, Kiddo" />
+      </div>
+    </div>
+
+    <div class="section">
+      <h3 class="section-title">🎯 Joke Categories</h3>
+      <div class="checkbox-group">
+        <label class="checkbox-item">
+          <input type="checkbox" id="catProgramming" checked />
+          <span>💻 Programming Jokes</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="catAI" checked />
+          <span>🤖 AI & Tech Jokes</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="catClassic" checked />
+          <span>👴 Classic Dad Jokes</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="catPuns" checked />
+          <span>🎭 Puns (the good kind... they're all good)</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3 class="section-title">📊 Your Dad Stats</h3>
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-value" id="totalGroans">0</div>
+          <div class="stat-label">Total Groans</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="dadLevel">1</div>
+          <div class="stat-label">Dad Level</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="save">💾 Save Settings</button>
+      <button class="btn-danger" id="reset">🗑️ Reset Stats</button>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+      (function () {
+        var parentWindow = window.parent;
+        var nextId = 1;
+        var pending = {};
+
+        // --- Theme support ---
+        // Listen for theme variables from the host and apply them to :root
+        // This allows the extension to automatically match AgentCanvas colors
+        function enableHostTheme() {
+          window.addEventListener("message", function (event) {
+            if (event.source !== parentWindow) return;
+            var msg = event.data;
+            if (msg && msg.type === "agentCanvas:theme" && msg.variables) {
+              var root = document.documentElement;
+              for (var name in msg.variables) {
+                if (msg.variables.hasOwnProperty(name)) {
+                  root.style.setProperty(name, msg.variables[name]);
+                }
+              }
+            }
+          });
+        }
+
+        // Enable theme injection from host
+        enableHostTheme();
+        // --- End theme support ---
+
+        // --- Auto-resize support ---
+        // Reports the current content height to the host so the iframe can grow
+        // to fit the content naturally, like native settings pages.
+        function reportContentHeight() {
+          var height = document.body.scrollHeight;
+          parentWindow.postMessage({ type: "agentCanvas:resize", height: height }, "*");
+        }
+
+        function enableAutoResize() {
+          reportContentHeight();
+          var observer = new ResizeObserver(function () {
+            reportContentHeight();
+          });
+          observer.observe(document.body);
+        }
+
+        // Enable auto-resize for settings pages
+        enableAutoResize();
+        // --- End auto-resize support ---
+
+        window.addEventListener("message", function (event) {
+          if (event.source !== parentWindow) return;
+          var msg = event.data;
+          if (!msg || msg.kind !== "response") return;
+          var entry = pending[msg.id];
+          if (!entry) return;
+          delete pending[msg.id];
+          if (msg.error !== undefined) entry.reject(new Error(msg.error));
+          else entry.resolve(msg.result);
+        });
+
+        function request(method, params) {
+          var id = nextId++;
+          return new Promise(function (resolve, reject) {
+            pending[id] = { resolve: resolve, reject: reject };
+            parentWindow.postMessage(
+              { kind: "request", id: id, method: method, params: params },
+              "*"
+            );
+          });
+        }
+
+        var api = {
+          storage: {
+            get: function (key) {
+              return request("storage.get", { key: key });
+            },
+            set: function (key, value) {
+              return request("storage.set", { key: key, value: value });
+            },
+          },
+          window: {
+            showInformationMessage: function (message) {
+              return request("window.showInformationMessage", { message: message });
+            },
+          },
+        };
+
+        var statusEl = document.getElementById("status");
+
+        function showStatus(message, type) {
+          statusEl.textContent = message;
+          statusEl.className = type;
+          setTimeout(function () {
+            statusEl.className = "";
+          }, 3000);
+        }
+
+        function calculateDadLevel(groans) {
+          if (groans >= 100) return "👑 Supreme Dad";
+          if (groans >= 50) return "🏆 Master Dad";
+          if (groans >= 25) return "⭐ Expert Dad";
+          if (groans >= 10) return "📈 Rising Dad";
+          if (groans >= 5) return "🌱 Apprentice Dad";
+          return "🥚 Novice Dad";
+        }
+
+        // Load saved settings
+        Promise.all([
+          api.storage.get("dadName"),
+          api.storage.get("victimName"),
+          api.storage.get("categories"),
+          api.storage.get("groanCount"),
+        ]).then(function (results) {
+          var dadName = results[0];
+          var victimName = results[1];
+          var categories = results[2];
+          var groanCount = results[3] || 0;
+
+          if (dadName) document.getElementById("dadName").value = dadName;
+          if (victimName) document.getElementById("victimName").value = victimName;
+
+          if (categories) {
+            document.getElementById("catProgramming").checked = categories.programming !== false;
+            document.getElementById("catAI").checked = categories.ai !== false;
+            document.getElementById("catClassic").checked = categories.classic !== false;
+            document.getElementById("catPuns").checked = categories.puns !== false;
+          }
+
+          document.getElementById("totalGroans").textContent = groanCount;
+          document.getElementById("dadLevel").textContent = calculateDadLevel(groanCount);
+        });
+
+        // Save settings
+        document.getElementById("save").addEventListener("click", function () {
+          var settings = {
+            dadName: document.getElementById("dadName").value,
+            victimName: document.getElementById("victimName").value,
+            categories: {
+              programming: document.getElementById("catProgramming").checked,
+              ai: document.getElementById("catAI").checked,
+              classic: document.getElementById("catClassic").checked,
+              puns: document.getElementById("catPuns").checked,
+            },
+          };
+
+          Promise.all([
+            api.storage.set("dadName", settings.dadName),
+            api.storage.set("victimName", settings.victimName),
+            api.storage.set("categories", settings.categories),
+          ]).then(function () {
+            showStatus("✅ Settings saved! Your dad powers are configured.", "success");
+            api.window.showInformationMessage("👴 Settings saved! Now go forth and make them groan.");
+          }).catch(function (e) {
+            showStatus("❌ Error saving: " + e.message, "error");
+          });
+        });
+
+        // Reset stats
+        document.getElementById("reset").addEventListener("click", function () {
+          if (!confirm("Are you sure? This will reset your groan count and dad level!")) {
+            return;
+          }
+
+          api.storage.set("groanCount", 0).then(function () {
+            document.getElementById("totalGroans").textContent = "0";
+            document.getElementById("dadLevel").textContent = calculateDadLevel(0);
+            showStatus("🗑️ Stats reset. Time to rebuild your dad legacy!", "success");
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>
