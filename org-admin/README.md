@@ -30,7 +30,7 @@ Every instance should already have a super admin. Migration `138` promotes the o
 - An OHE install, and an API key for a user. Create one in the app under **Settings > API Keys**.
 - To **list** super admins through the API, one of:
   - the key belongs to a super admin, or
-  - **Enable OEM User Creation Flow** is on in the Replicated admin console. It sets `USER_PROVISIONING_ENABLED`, which lets any signed-in user list super admins on OHE **1.62.0 or later**. Earlier versions return 403 to everyone but super admins, even with the toggle on.
+  - **Enable OEM User Creation Flow** is on (see [Enabling the Feature](#enabling-the-feature)). It sets `USER_PROVISIONING_ENABLED`, which lets any signed-in user list super admins on OHE **1.62.0 or later**. Earlier versions return 403 to everyone but super admins, even with the toggle on.
 - To **grant** the role or **create orgs**, the key must belong to a super admin.
 - `pip install requests`
 
@@ -118,6 +118,19 @@ python org_admin.py provision-user \
 <!-- /docs:tabs -->
 
 <!-- /docs:steps -->
+
+## Enabling the Feature
+
+The endpoint is registered only when the operator turns it on. Both install types set `USER_PROVISIONING_ENABLED=true` on the app server:
+
+| Install type | Where | Setting |
+|---|---|---|
+| Replicated VM | Admin console → Config → Advanced Options | Check **Enable OEM User Creation Flow**, then save the config and deploy the new version |
+| Helm | Your `values.yaml` | `userProvisioning.enabled: true` |
+
+![The Enable OEM User Creation Flow checkbox under Advanced Options in the admin console Config tab](./enable-oem-user-creation-flow.png)
+
+When it is disabled, `POST /api/organizations/provision-user` returns `404`. Org creation and superadmin management are always available.
 
 ## Find the Super Admin Without the API
 
