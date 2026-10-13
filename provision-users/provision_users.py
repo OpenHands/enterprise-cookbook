@@ -22,10 +22,11 @@ Auth: every call in steps 1-2 is made *as the superadmin*, with a normal
 ``Authorization: Bearer <token>`` header — NOT the internal ``X-Service-API-Key``
 header (see the "Wrong endpoint" note below). On a fresh install the superadmin
 is simply the first user to authenticate. Supply that user's token via
-``--admin-token`` / ``$OH_ADMIN_TOKEN``.
+``--api-key`` / ``$OH_API_KEY``.
 
-    export OH_ADMIN_TOKEN=...                     # superadmin bearer token
-    export OH_BASE_URL=https://openhands.example.com
+    export OH_API_KEY=...                         # superadmin bearer token
+    export OH_API_BASE=https://openhands.example.com
+    python provision_users.py                     # demo: new org, one new user
     python provision_users.py --org-name "Acme Corp" \
         --contact-name "Ada Lovelace" --contact-email ada@example.com \
         --user alice@example.com --user bob@example.com --role member
@@ -50,12 +51,15 @@ internal ``/api/service/*`` routes (guarded by the operator's
 not this admin flow. User provisioning uses ``/api/organizations/provision-user``
 with an ``Authorization: Bearer`` superadmin token.
 
-This script only reads back what the API returns; it does not attempt any
-cleanup. If a provisioning call fails after the account is partially created,
-the server compensates on its own (see the Enterprise docs).
+Demo mode: with no --org-name, --org-id, or --user, the script creates a
+throwaway org and user, verifies the key, and deletes both again. Pass --keep to
+leave them in place. Naming any org or user yourself also keeps them.
 
-WARNING: the provision-user response contains a plaintext password and an API
-key. Treat stdout as sensitive; do not paste it into logs or tickets.
+If a provisioning call fails after the account is partially created, the server
+compensates on its own (see the Enterprise docs).
+
+The provision-user response contains a plaintext password and an API key, so
+the script masks both unless you pass ``--show-secrets``.
 """
 
 from __future__ import annotations
@@ -64,6 +68,7 @@ import argparse
 import json
 import os
 import sys
+import uuid
 
 import requests
 
@@ -73,19 +78,20 @@ def parse_args() -> argparse.Namespace:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument(
-        "--base-url",
-        default=os.environ.get("OH_BASE_URL"),
-        help="Enterprise base URL, e.g. https://openhands.example.com "
-        "(default: $OH_BASE_URL).",
+        "--api-key",
+        default=os.environ.get("OH_API_KEY"),
+        help="Superadmin bearer token (default: $OH_API_KEY).",
     )
     p.add_argument(
-        "--admin-token",
-        default=os.environ.get("OH_ADMIN_TOKEN"),
-        help="Superadmin bearer token (default: $OH_ADMIN_TOKEN).",
+        "--base-url",
+        default=os.environ.get("OH_API_BASE"),
+        help="Enterprise base URL, e.g. https://openhands.example.com "
+        "(default: $OH_API_BASE).",
     )
     p.add_argument(
         "--org-name",
-        help="Create a new org with this name and provision into it.",
+        help="Create a new org with this name and provision into it "
+        "(default: a generated demo name when --org-id is not given).",
     )
     p.add_argument(
         "--org-id",
@@ -94,11 +100,13 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--contact-name",
-        help="Org contact name (required with --org-name).",
+        default="Cookbook Demo",
+        help="Contact name for a new org (default: %(default)s).",
     )
     p.add_argument(
         "--contact-email",
-        help="Org contact email (required with --org-name).",
+        default="cookbook-demo@example.com",
+        help="Contact email for a new org (default: %(default)s).",
     )
     p.add_argument(
         "--user",
@@ -106,7 +114,8 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         metavar="EMAIL",
-        help="Email of a user to provision. Repeat for multiple users.",
+        help="Email of a user to provision. Repeat for multiple users "
+        "(default: one generated demo user).",
     )
     p.add_argument(
         "--role",
@@ -121,7 +130,25 @@ def parse_args() -> argparse.Namespace:
         "(deleting the old one of the same name) instead of returning the "
         "existing key. Ignored on a first-time create.",
     )
+    p.add_argument(
+        "--keep",
+        action="store_true",
+        help="In demo mode, leave the org and user in place instead of deleting them.",
+    )
+    p.add_argument(
+        "--show-secrets",
+        action="store_true",
+        help="Print the provisioned password and API key in full instead of "
+        "masking them.",
+    )
     return p.parse_args()
+
+
+def mask(secret: str | None) -> str | None:
+    """Keep only the last four characters of a credential."""
+    if not secret:
+        return secret
+    return f"****{secret[-4:]}"
 
 
 def create_org(
@@ -195,32 +222,80 @@ def whoami_as_user(base_url: str, api_key: str, org_id: str) -> dict:
     return resp.json()
 
 
+def delete_org(base_url: str, owner_api_key: str, org_id: str) -> None:
+    """DELETE /api/organizations/{org_id}, authenticated as an org *owner*.
+
+    A superadmin has no org-scoped powers, so even org deletion needs the key of
+    a user holding the ``owner`` role in that org.
+    """
+    resp = requests.delete(
+        f"{base_url}/api/organizations/{org_id}",
+        headers={"Authorization": f"Bearer {owner_api_key}", "X-Org-Id": org_id},
+    )
+    resp.raise_for_status()
+
+
+def delete_user(base_url: str, admin_token: str, user_id: str, org_id: str) -> None:
+    """DELETE /api/admin/users/{user_id} as the superadmin."""
+    resp = requests.delete(
+        f"{base_url}/api/admin/users/{user_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        params={"org_id": org_id},
+    )
+    resp.raise_for_status()
+
+
+def clean_up(
+    base_url: str,
+    admin_token: str,
+    org_id: str,
+    created_org: bool,
+    created_users: list[dict],
+    suffix: str,
+) -> None:
+    """Delete only what this run created: its org, then its users."""
+    if created_org:
+        owner = next((u for u in created_users if u["role"] == "owner"), None)
+        if owner is None:
+            owner = provision_user(
+                base_url, admin_token, org_id, f"cleanup-{suffix}@example.com", "owner"
+            )
+            created_users.append(owner)
+        delete_org(base_url, owner["api_key"], org_id)
+        print(f"\ndeleted org {org_id}")
+    for user in created_users:
+        delete_user(base_url, admin_token, user["user_id"], org_id)
+        print(f"deleted user {user['email']}")
+
+
 def main() -> int:
     args = parse_args()
 
     if not args.base_url:
-        sys.exit("error: set --base-url or $OH_BASE_URL")
-    if not args.admin_token:
-        sys.exit("error: set --admin-token or $OH_ADMIN_TOKEN")
-    if bool(args.org_name) == bool(args.org_id):
-        sys.exit("error: provide exactly one of --org-name or --org-id")
-    if args.org_name and not (args.contact_name and args.contact_email):
-        sys.exit("error: --org-name requires --contact-name and --contact-email")
-    if not args.users:
-        sys.exit("error: provide at least one --user EMAIL")
+        sys.exit("error: set --base-url or $OH_API_BASE")
+    if not args.api_key:
+        sys.exit("error: set --api-key or $OH_API_KEY")
+    if args.org_name and args.org_id:
+        sys.exit("error: provide at most one of --org-name or --org-id")
+
+    demo = not (args.org_name or args.org_id or args.users)
+    suffix = uuid.uuid4().hex[:8]
+    org_name = args.org_name or f"Provision Users Demo {suffix}"
+    users = args.users or [f"demo-user-{suffix}@example.com"]
 
     base_url = args.base_url.rstrip("/")
     admin_headers = {
-        "Authorization": f"Bearer {args.admin_token}",
+        "Authorization": f"Bearer {args.api_key}",
         "Content-Type": "application/json",
     }
 
     # 1. Resolve the target org: create a fresh one, or reuse an existing id.
-    if args.org_name:
+    created_org = not args.org_id
+    if created_org:
         org = create_org(
             base_url,
             admin_headers,
-            args.org_name,
+            org_name,
             args.contact_name,
             args.contact_email,
         )
@@ -231,20 +306,28 @@ def main() -> int:
         print(f"using existing org: {org_id}")
 
     # 2. Provision each user into the org, then 3. verify their API key works.
-    for email in args.users:
+    created_users = []
+    for email in users:
         provisioned = provision_user(
-            base_url, args.admin_token, org_id, email, args.role, args.reissue_api_key
+            base_url, args.api_key, org_id, email, args.role, args.reissue_api_key
         )
         status_code = provisioned.pop("_status_code", None)
+        if provisioned.get("action") == "created":
+            created_users.append(provisioned)
         action = provisioned.get("action", "?")
         print(f"\nprovisioned {email} as {provisioned['role']}: ", end="")
         print(f"action={action} (HTTP {status_code})")
-        # The password/api_key are sensitive; printed here only for the demo.
-        print(json.dumps(provisioned, indent=2))
+        shown = dict(provisioned)
+        if not args.show_secrets:
+            shown["password"] = mask(shown.get("password"))
+            shown["api_key"] = mask(shown.get("api_key"))
+        print(json.dumps(shown, indent=2))
 
         me = whoami_as_user(base_url, provisioned["api_key"], org_id)
         print(f"  api_key verified -> role={me['role']} in org {me['org_id']}")
 
+    if demo and not args.keep:
+        clean_up(base_url, args.api_key, org_id, created_org, created_users, suffix)
     return 0
 
 

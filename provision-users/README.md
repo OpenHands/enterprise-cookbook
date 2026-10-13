@@ -1,71 +1,140 @@
-# Provision users into an organization (OpenHands Enterprise)
+# Provision Users
 
-**Question:** *Can a backend system create organizations and users in OpenHands
-without a human clicking through the sign-up UI, and get an API key to act on
-each user's behalf?*
+Create an organization, provision users into it, and get a per-user API key to act on each user's behalf, all as the superadmin of an **OpenHands Enterprise** instance. No UI and no interactive sign-up are involved.
 
-**Short answer:** **Yes — on OpenHands Enterprise, as a superadmin.** This is
-the building block for **OEM integrations**, where your own user-management
-system owns the user/org lifecycle and mirrors it into OpenHands.
+This is the building block for **OEM integrations**, where your own user-management system owns the user and organization lifecycle and mirrors it into OpenHands.
 
-> This example is **Enterprise-only**. The endpoints below do not exist on
-> OpenHands Cloud (SaaS) or the open-source build. The provisioning endpoint is
-> also **off by default** — an operator must enable it (see
-> [Enabling the feature](#enabling-the-feature)).
+> [!IMPORTANT]
+> This example is **Enterprise-only**. The endpoints do not exist on OpenHands Cloud or the open-source build. The provisioning endpoint is also **off by default**, so an operator must enable it (see [Enabling the Feature](#enabling-the-feature)).
 
-## The flow
+## How It Works
 
-Everything is done **as the superadmin**:
+Every call is made as the superadmin. The `api_key` that comes back is what your system stores and uses afterwards.
 
-```text
-1. POST /api/organizations                    -> create an org (superadmin only)
-2. POST /api/organizations/provision-user     -> create a user in that org
-   (X-Org-Id: <org-id>)                           (bypasses email/TOS/OAuth)
-3. use response.api_key as a Bearer token     -> act on the user's behalf
+```mermaid
+sequenceDiagram
+    participant S as Your System
+    participant O as OpenHands Enterprise
+    S->>O: POST /api/organizations (superadmin token)
+    O-->>S: org id
+    S->>O: POST /api/organizations/provision-user (X-Org-Id: org id)
+    O-->>S: email, password, api_key
+    S->>O: Any API call with the user's api_key
+    O-->>S: Acts as that user
 ```
 
-The provision-user response returns the new user's `email`, a `password`
-(generated if you did not supply one, and **only on a true create**), and an
-`api_key` **bound to the target org**. Step 3 is the payoff: your system stores
-that key and uses it to drive OpenHands (create conversations, etc.) for that
-user.
+1. `POST /api/organizations` creates the org. Only a superadmin can do this, and the creator is **not** added as a member.
+2. `POST /api/organizations/provision-user` creates a user in that org. The target org goes in the **`X-Org-Id` header**, and the call bypasses email verification, terms of service, and OAuth.
+3. Use the returned `api_key` as a Bearer token to act on that user's behalf.
 
-### Idempotency (safe to re-run)
+The provision-user response holds the new user's `email`, a `password` (generated if you did not supply one, and returned only on a true create), and an `api_key` bound to the target org.
 
-`provision-user` is **idempotent**. Re-running it for an email that already
-exists does *not* fail or duplicate the account — the server pre-checks Keycloak
-and its own user store, skips the create steps, ensures org membership, and
-resolves an API key. The response's `action` field (and the HTTP status) tells
-you which branch was taken:
+### Idempotency
 
-| `action`         | HTTP | Meaning                                                        | `password` |
-|------------------|------|----------------------------------------------------------------|------------|
-| `created`        | 201  | Brand-new user created and added to the org                    | set        |
-| `added_to_org`   | 200  | User already existed; added to this org                        | `null`     |
-| `reprovisioned`  | 200  | User already existed and was already a member; key resolved    | `null`     |
+`provision-user` is idempotent. Re-running it for an email that already exists does not fail or duplicate the account. The server skips the create steps, ensures org membership, and resolves an API key. The `action` field and the HTTP status tell you which branch it took:
 
-On both idempotent paths the existing Keycloak **password is never rotated**, so
-`password` is `null`. By default the endpoint also returns the user's
-**existing** API key (matching `api_key_name`) rather than minting a new one.
-Pass `reissue_api_key: true` (or `--reissue-api-key` on the script) to delete the
-old key and mint a fresh one instead — use this for the "user lost their key"
-recovery path.
+| `action` | HTTP | Meaning | `password` |
+|---|---|---|---|
+| `created` | 201 | Brand-new user created and added to the org | Set |
+| `added_to_org` | 200 | User already existed and was added to this org | `null` |
+| `reprovisioned` | 200 | User already existed and was already a member, so only the key was resolved | `null` |
 
-## Who is the superadmin?
+The existing Keycloak password is never rotated, so `password` is `null` on both idempotent paths. By default the endpoint returns the user's **existing** API key. Pass `reissue_api_key: true` (or `--reissue-api-key` on the script) to delete the old key and mint a fresh one. Use this to recover a user who lost their key.
 
-The **superadmin** is the instance-level admin — the only role that can create
-organizations and provision users at the instance level. On a fresh install,
-the superadmin is simply the **first user to authenticate**. Supply that user's
-bearer token as `$OH_ADMIN_TOKEN`.
+## Prerequisites
 
-A superadmin can list its peers with `GET /api/admin/super-admins`, but that
-endpoint itself requires superadmin, so it can't be used by an unprivileged user
-to *discover* who the superadmin is. There is no self-service "am I the
-superadmin?" endpoint today.
+- An OpenHands Enterprise instance with user provisioning enabled (see [Enabling the Feature](#enabling-the-feature)).
+- The **superadmin** bearer token for that instance. On a fresh install, the superadmin is the first user to authenticate.
+- `pip install requests`
 
-## The two calls that matter
+> [!NOTE]
+> A superadmin can list its peers with `GET /api/admin/super-admins`, but that endpoint itself requires superadmin. There is no self-service "am I the superadmin?" endpoint today.
 
-Create the org (the superadmin is **not** added as a member):
+## Run It
+
+Run these from the `provision-users/` directory.
+
+```bash
+pip install requests
+
+export OH_API_BASE=https://openhands.example.com
+export OH_API_KEY=$SUPERADMIN_TOKEN
+
+python provision_users.py
+```
+
+With no other arguments the script runs a complete demo. It creates a throwaway org and one user, verifies the user's key with `GET /api/organizations/{org_id}/me`, then deletes both again.
+
+```text
+created org: Provision Users Demo 24bafb4f (0b624e33-8582-4086-8af9-dfa56f215c2d)
+
+provisioned demo-user-24bafb4f@example.com as member: action=created (HTTP 201)
+{
+  "email": "demo-user-24bafb4f@example.com",
+  "password": "****3lK8",
+  "api_key": "****BERX",
+  ...
+}
+  api_key verified -> role=member in org 0b624e33-8582-4086-8af9-dfa56f215c2d
+
+deleted org 0b624e33-8582-4086-8af9-dfa56f215c2d
+deleted user demo-user-24bafb4f@example.com
+deleted user cleanup-24bafb4f@example.com
+```
+
+The password and API key are masked in the output. Pass `--show-secrets` to print them in full.
+
+> [!NOTE]
+> A superadmin has no org-scoped powers, so deleting an org needs the key of an org **owner**. When none of the demo users is an owner, the script provisions a short-lived `cleanup-…@example.com` owner for that step and deletes it with the others.
+
+To provision real users, name the org or the users. The script then keeps everything it creates.
+
+<!-- docs:tabs -->
+
+### New Org
+
+```bash
+python provision_users.py \
+  --org-name "Acme Corp" \
+  --contact-name "Ada Lovelace" --contact-email ada@example.com \
+  --user alice@example.com --user bob@example.com \
+  --role member
+```
+
+### Existing Org
+
+```bash
+python provision_users.py \
+  --org-id 0f9c3b2a-1d4e-4c8a-9b6f-2e7d5a1c3b4d \
+  --user carol@example.com --role admin
+```
+
+### Recover a Lost Key
+
+```bash
+python provision_users.py \
+  --org-id 0f9c3b2a-1d4e-4c8a-9b6f-2e7d5a1c3b4d \
+  --user carol@example.com --reissue-api-key
+```
+
+<!-- /docs:tabs -->
+
+| Flag | Environment variable | Default |
+|---|---|---|
+| `--api-key` | `OH_API_KEY` | Required (superadmin token) |
+| `--base-url` | `OH_API_BASE` | Required (an Enterprise instance has no standard URL) |
+| `--org-name` | | A generated demo name |
+| `--org-id` | | Create a new org |
+| `--contact-name`, `--contact-email` | | Demo values, used when creating an org |
+| `--user` | | One generated demo user. Repeat for several |
+| `--role` | | `member` (or `admin`, `owner`) |
+| `--reissue-api-key` | | Off |
+| `--keep` | | Off. In demo mode, leave the org and user in place |
+| `--show-secrets` | | Off |
+
+## The Two Calls That Matter
+
+Create the org. The superadmin is **not** added as a member:
 
 ```python
 requests.post(
@@ -80,8 +149,7 @@ requests.post(
 # -> { "id": "<org-id>", "name": "Acme Corp", ... }
 ```
 
-Provision a user into it (target org travels in the **`X-Org-Id` header**, not
-the URL):
+Provision a user into it. The target org travels in the `X-Org-Id` header, not the URL:
 
 ```python
 requests.post(
@@ -98,50 +166,11 @@ requests.post(
 #     "created": true, "action": "created" }
 ```
 
-`role` is one of `member` (default), `admin`, or `owner`. You can also pass an
-optional `password` (must satisfy the realm policy), `api_key_name`, and
-`reissue_api_key`.
+`role` is one of `member` (default), `admin`, or `owner`. You can also pass an optional `password` (it must satisfy the realm policy), `api_key_name`, and `reissue_api_key`.
 
-Re-running the same call is safe (see [Idempotency](#idempotency-safe-to-re-run)
-above): an existing user returns HTTP 200 with `"password": null`, `"created":
-false`, and `action` of `added_to_org` or `reprovisioned`. Add
-`"reissue_api_key": true` to rotate the key instead of returning the existing
-one.
+## Enabling the Feature
 
-## Running
-
-```bash
-pip install requests
-
-export OH_BASE_URL=https://openhands.example.com
-export OH_ADMIN_TOKEN=...          # superadmin bearer token
-
-# Create a new org and provision two members into it
-python provision_users.py \
-    --org-name "Acme Corp" \
-    --contact-name "Ada Lovelace" --contact-email ada@example.com \
-    --user alice@example.com --user bob@example.com \
-    --role member
-
-# Or provision into an existing org
-python provision_users.py \
-    --org-id 0f9c3b2a-1d4e-4c8a-9b6f-2e7d5a1c3b4d \
-    --user carol@example.com --role admin
-
-# Recover a user who lost their key: re-run with --reissue-api-key to rotate it
-python provision_users.py \
-    --org-id 0f9c3b2a-1d4e-4c8a-9b6f-2e7d5a1c3b4d \
-    --user carol@example.com --reissue-api-key
-```
-
-The script creates/reuses the org, provisions each user, and then calls
-`GET /api/organizations/{org_id}/me` **with the freshly minted key** to prove
-it is live and scoped to the right org. It prints the `action` and HTTP status
-for each user so you can see whether it was a create or an idempotent re-provision.
-
-## Enabling the feature
-
-The provision-user endpoint is registered only when the operator turns it on:
+The endpoint is registered only when the operator turns it on:
 
 ```yaml
 # Helm values
@@ -149,49 +178,59 @@ userProvisioning:
   enabled: true      # sets USER_PROVISIONING_ENABLED=true in the deployment
 ```
 
-When disabled, `POST /api/organizations/provision-user` returns `404`. Org
-creation and superadmin management are always available.
+When it is disabled, `POST /api/organizations/provision-user` returns `404`. Org creation and superadmin management are always available.
 
 ## Troubleshooting
 
-**`401 Invalid service API key`** — You are calling the wrong endpoint. That
-error comes from the internal **service-to-service** routes under
-`/api/service/*` (e.g. `POST /api/service/users/{user_id}/orgs/{org_id}/api-keys`),
-which authenticate with the `X-Service-API-Key` header checked against the
-operator-provisioned `AUTOMATIONS_SERVICE_KEY` shared secret — a key meant for
-the internal automations service, not for admins. User provisioning is a
-different flow: call `POST /api/organizations/provision-user` with an
-`Authorization: Bearer <superadmin-token>` header (and `X-Org-Id`). It never uses
-`X-Service-API-Key`. Note the near-identical header names: `X-Session-API-Key`
-(per-sandbox agent-server auth, used in other examples here) and
-`X-Service-API-Key` (internal service auth) are both distinct from the plain
-`Authorization: Bearer` token this endpoint expects.
+<details>
+<summary><code>401 Invalid service API key</code></summary>
 
-**`404 Not Found`** on `provision-user` — the feature is disabled; see
-[Enabling the feature](#enabling-the-feature).
+You are calling the wrong endpoint. That error comes from the internal service-to-service routes under `/api/service/*`, such as `POST /api/service/users/{user_id}/orgs/{org_id}/api-keys`. They authenticate with the `X-Service-API-Key` header, checked against the operator-provisioned `AUTOMATIONS_SERVICE_KEY` shared secret. That key is meant for the internal automations service, not for admins.
 
-**`403 Forbidden`** — the caller lacks the `PROVISION_USER` permission (org
-`owner`/`admin` or an instance super role), or you targeted a personal
-workspace (provisioning into a personal workspace is rejected).
+User provisioning is a different flow. Call `POST /api/organizations/provision-user` with an `Authorization: Bearer <superadmin-token>` header and `X-Org-Id`. It never uses `X-Service-API-Key`. `X-Session-API-Key` (per-sandbox agent-server auth, used in other examples) is also distinct from the plain Bearer token this endpoint expects.
+
+</details>
+
+<details>
+<summary><code>404 Not Found</code> on provision-user</summary>
+
+The feature is disabled. See [Enabling the Feature](#enabling-the-feature).
+
+</details>
+
+<details>
+<summary><code>403 Forbidden</code></summary>
+
+The caller lacks the `PROVISION_USER` permission (org `owner` or `admin`, or an instance super role), or you targeted a personal workspace. Provisioning into a personal workspace is rejected.
+
+</details>
 
 ## Security
 
-- **The provision-user response is a secret.** The `password` is returned **only
-  here** (the endpoint bypasses the email-based set-password flow) and the
-  `api_key` grants access as the new user. Do not log the response; hand the
-  credential to the user out-of-band; always use TLS. This example prints the
-  full response only to make the shape obvious — redact it in real use.
-- **Guard the superadmin token.** Anyone holding it can create orgs, mint users,
-  and grant/revoke superadmin. Treat it like a root credential.
-- A superadmin does **not** inherit org-scoped powers (secrets, billing, LLM
-  settings, org deletion) in the orgs it creates.
+> [!WARNING]
+> The provision-user response is a secret. The `password` is returned only there, because the endpoint bypasses the email-based set-password flow, and the `api_key` grants access as the new user. Do not log the response, hand the credential to the user out-of-band, and always use TLS. The script masks both values unless you pass `--show-secrets`.
 
-## Reference
+- **Guard the superadmin token.** Anyone holding it can create orgs, mint users, and grant or revoke superadmin. Treat it like a root credential.
+- A superadmin does **not** inherit org-scoped powers (secrets, billing, LLM settings, org deletion) in the orgs it creates.
 
-- Enterprise docs: **User Provisioning API** (docs.all-hands.dev → Enterprise)
-- Underlying PRs: OpenHands/OpenHands
-  [#14864](https://github.com/OpenHands/OpenHands/pull/14864) (provisioning
-  endpoint),
-  [#14937](https://github.com/OpenHands/OpenHands/pull/14937) (super roles), and
-  [#117](https://github.com/OpenHands/enterprise/pull/117) (idempotent
-  re-provisioning: `reissue_api_key`, the `action` field, and 200-vs-201 status).
+## APIs Used
+
+| Endpoint | Used for |
+|---|---|
+| `POST /api/organizations` | Create the org (superadmin only) |
+| `POST /api/organizations/provision-user` | Create or re-provision a user and get an API key |
+| `GET /api/organizations/{org_id}/me` | Verify the minted key and its role |
+| `DELETE /api/organizations/{org_id}` | Demo cleanup: delete the org, as an org owner |
+| `DELETE /api/admin/users/{user_id}` | Demo cleanup: delete a user, as the superadmin |
+
+## Related
+
+<!-- docs:cards -->
+
+- [`service-account-github-pat`](../service-account-github-pat/) - Act for many users from one account with per-conversation credentials
+- [`per-conversation-secrets`](../per-conversation-secrets/) - Inject secrets into a single conversation
+- [User provisioning endpoint (OpenHands #14864)](https://github.com/OpenHands/OpenHands/pull/14864) - The provisioning endpoint
+- [Super roles (OpenHands #14937)](https://github.com/OpenHands/OpenHands/pull/14937) - Instance-level superadmin roles
+- [Idempotent re-provisioning (enterprise #117)](https://github.com/OpenHands/enterprise/pull/117) - `reissue_api_key`, `action`, and 200 vs 201
+
+<!-- /docs:cards -->
