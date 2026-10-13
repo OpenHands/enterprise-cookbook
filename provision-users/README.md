@@ -170,13 +170,12 @@ requests.post(
 
 ## Enabling the Feature
 
-The endpoint is registered only when the operator turns it on:
+The endpoint is registered only when the operator turns it on. Both install types set `USER_PROVISIONING_ENABLED=true` on the app server:
 
-```yaml
-# Helm values
-userProvisioning:
-  enabled: true      # sets USER_PROVISIONING_ENABLED=true in the deployment
-```
+| Install type | Where | Setting |
+|---|---|---|
+| Replicated VM | Admin console → Config → Advanced Options | Check **Enable OEM User Creation Flow**, then save the config and deploy the new version |
+| Helm | Your `values.yaml` | `userProvisioning.enabled: true` |
 
 When it is disabled, `POST /api/organizations/provision-user` returns `404`. Org creation and superadmin management are always available.
 
