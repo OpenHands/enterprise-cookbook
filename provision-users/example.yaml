@@ -1,5 +1,5 @@
 ---
 title: Provision Users
 description: Provision organizations and users as a superadmin and get a per-user API key for OEM integrations.
-category: Secrets & authentication
+category: Onboarding & org admin
 icon: users-gear

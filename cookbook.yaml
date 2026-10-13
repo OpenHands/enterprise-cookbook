@@ -20,6 +20,8 @@ categories:
       description: Observe conversations and react to their state.
     - name: Secrets & authentication
       description: Inject credentials and manage identity.
+    - name: Onboarding & org admin
+      description: Find super admins, create organizations, and provision users on OpenHands Enterprise.
     - name: Plugins, skills & MCP
       description: Extend conversations with plugins, skills, and MCP servers.
     - name: Custom agents & tools

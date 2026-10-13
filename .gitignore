@@ -47,3 +47,4 @@ Thumbs.db
 
 # Node
 node_modules/
+org-admin/provisioned-*.json
