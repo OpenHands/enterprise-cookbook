@@ -1,8 +1,6 @@
 # Super Admins and Organizations
 
-Find the super admin on an OpenHands Enterprise (OHE) install, promote more super admins, and create team organizations next to the personal organizations your users already have.
-
-Every OHE user has a personal organization. An install that predates organizations has only those. Creating a team org, and putting people in it, is an instance-level action that only a **super admin** can take. This example is a small command-line tool for those steps, with the reasons behind each one.
+Every OpenHands Enterprise (OHE) user has a personal organization, and an install that predates organizations has only those. Creating a team org, and putting people in it, is an instance-level action that only a **super admin** can take. This example is a small command-line tool for those steps, with the reasons behind each one.
 
 ## How It Works
 
