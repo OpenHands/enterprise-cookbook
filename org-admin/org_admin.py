@@ -25,7 +25,7 @@ SUPER_ADMIN_HINT = """\
 Listing super admins is restricted to super admins by default. Either:
   - run this tool with an API key that belongs to a super admin, or
   - on OHE 1.62.0 or later, enable "Enable OEM User Creation Flow" in the
-    Replicated admin console (sets USER_PROVISIONING_ENABLED, which lets any
+    admin console (sets USER_PROVISIONING_ENABLED, which lets any
     signed-in user list them), or
   - ask the database (see README.md, "Find the Super Admin Without the API")."""
 
@@ -192,7 +192,7 @@ def cmd_invite(client: Client, args: argparse.Namespace) -> int:
     if result["successful"]:
         print(
             "Existing users are added at their next login; if they were on their "
-            "personal org they land in this one."
+            "personal workspace they land in this one."
         )
     return 1 if result["failed"] else 0
 
