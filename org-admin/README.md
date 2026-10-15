@@ -174,7 +174,7 @@ If it returns nothing, run the ordering from migration `138` to see who would be
 
 <!-- docs:cards -->
 
-- [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview) - Personal and team organizations, the current organization, super admins, and the default organization
+- [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview) - Personal workspaces and team organizations, the current organization, super admins, and the default organization
 - [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations) - What the VM install and Kubernetes (Helm) settings do, and how to migrate an existing installation
 - [`provision-users`](../provision-users/) - Script the same org and user provisioning from your own system, including idempotent re-runs and API key reissue
 

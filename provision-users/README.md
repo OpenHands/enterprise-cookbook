@@ -233,7 +233,7 @@ The caller lacks the `PROVISION_USER` permission (org `owner` or `admin`, or an 
 
 <!-- docs:cards -->
 
-- [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview) - Personal and team organizations, the current organization, super admins, and the default organization
+- [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview) - Personal workspaces and team organizations, the current organization, super admins, and the default organization
 - [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations) - What the VM install and Kubernetes (Helm) settings do, and how to migrate an existing installation
 - [`org-admin`](../org-admin/) - Find the super admin and create team orgs before you provision users into them
 - [`service-account-github-pat`](../service-account-github-pat/) - Act for many users from one account with per-conversation credentials
