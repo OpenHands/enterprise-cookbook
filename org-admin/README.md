@@ -1,13 +1,13 @@
 # Super Admins and Organizations
 
-Every OpenHands Enterprise (OHE) user has a personal organization, and an install that predates organizations has only those. Creating a team org, and putting people in it, is an instance-level action that only a **super admin** can take. This example is a small command-line tool for those steps, with the reasons behind each one.
+Every OpenHands Enterprise (OHE) user has a [personal organization](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#personal-and-team-organizations), and an install that predates organizations has only those. Creating a [team org](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#personal-and-team-organizations), and putting people in it, is an instance-level action that only a [**super admin**](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#super-admins) can take. This example is a small command-line tool for those steps, with the reasons behind each one.
 
 > [!NOTE]
 > For how personal organizations, team organizations, and super admins work, see the [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview). For what the VM install and Kubernetes (Helm) settings do, see [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations).
 
 ## How It Works
 
-A super admin is a user whose instance-level role is `admin`. It is separate from the `owner`, `admin` and `member` roles inside an org. It carries the permissions to create orgs, invite people into orgs it is not a member of, and grant or revoke the role itself.
+A [super admin](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#super-admins) is a user whose instance-level role is `admin`. It is separate from the `owner`, `admin` and `member` roles inside an org. It carries the permissions to create orgs, invite people into orgs it is not a member of, and grant or revoke the role itself.
 
 ```mermaid
 sequenceDiagram
@@ -152,8 +152,8 @@ If it returns nothing, run the ordering from migration `138` to see who would be
 ## Things to Know
 
 - **Listing orgs only shows memberships.** `GET /api/organizations` returns orgs the caller belongs to. Keep the id from `create-org`, because a super admin cannot list the orgs it created.
-- **Personal orgs are not touched.** Nothing here moves or hides personal data.
-- **The default-org flags change what a team org means.** If exactly one team org exists when `default_openhands_org_enabled` is later turned on, it is adopted as the default org, and with auto-add every user who signs in joins it. With more than one team org, the default-org bootstrap does nothing.
+- **Personal orgs are not touched.** Nothing here moves or hides personal data. Hiding personal workspaces is a separate setting; see [Hide Personal Workspaces](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations#hide-personal-workspaces).
+- **The default-org flags change what a team org means.** See [Default Organization](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations#default-organization). If exactly one team org exists when `default_openhands_org_enabled` is later turned on, it is adopted as the default org, and with auto-add every user who signs in joins it. With more than one team org, the default-org bootstrap does nothing.
 - **Unclaimed git events follow the same rule.** They fall back to the default org only while exactly one team org exists.
 - **Org creation is for super admins only.** The chart value `openOrgCreation.enabled` is meant to open it up, but the `POST /api/organizations` route checks the super-admin permission and does not read it.
 

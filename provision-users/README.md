@@ -1,6 +1,6 @@
 # Provision Users
 
-Create an organization, provision users into it, and get a per-user API key to act on each user's behalf, all as the superadmin of an **OpenHands Enterprise** instance. No UI and no interactive sign-up are involved.
+Create an [organization](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#key-concepts), provision users into it, and get a per-user API key to act on each user's behalf, all as the superadmin of an **OpenHands Enterprise** instance. No UI and no interactive sign-up are involved.
 
 This is the building block for **OEM integrations**, where your own user-management system owns the user and organization lifecycle and mirrors it into OpenHands.
 
@@ -51,7 +51,7 @@ The existing Keycloak password is never rotated, so `password` is `null` on both
 - `pip install requests`
 
 > [!NOTE]
-> A superadmin can list its peers with `GET /api/admin/super-admins`. That endpoint requires superadmin, unless user provisioning is enabled on OHE 1.62.0 or later, when any signed-in user can call it. There is no self-service "am I the superadmin?" endpoint. The [`org-admin`](../org-admin/) example shows how to find the superadmin and grant the role to more users.
+> A superadmin can list its peers with `GET /api/admin/super-admins`. That endpoint requires superadmin, unless user provisioning is enabled on OHE 1.62.0 or later, when any signed-in user can call it. There is no self-service "am I the superadmin?" endpoint. The [`org-admin`](../org-admin/) example shows how to find the superadmin and grant the role to more users. For what the role is and is not, see [Super Admins](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#super-admins).
 
 ## Run It
 
@@ -217,7 +217,7 @@ The caller lacks the `PROVISION_USER` permission (org `owner` or `admin`, or an 
 > The provision-user response is a secret. The `password` is returned only there, because the endpoint bypasses the email-based set-password flow, and the `api_key` grants access as the new user. Do not log the response, hand the credential to the user out-of-band, and always use TLS. The script masks both values unless you pass `--show-secrets`.
 
 - **Guard the superadmin token.** Anyone holding it can create orgs, mint users, and grant or revoke superadmin. Treat it like a root credential.
-- A superadmin does **not** inherit org-scoped powers (secrets, billing, LLM settings, org deletion) in the orgs it creates.
+- A superadmin does **not** inherit org-scoped powers (secrets, billing, LLM settings, org deletion) in the orgs it creates. See [Super Admins](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#super-admins).
 
 ## APIs Used
 
@@ -235,6 +235,7 @@ The caller lacks the `PROVISION_USER` permission (org `owner` or `admin`, or an 
 
 - [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview) - Personal and team organizations, the current organization, super admins, and the default organization
 - [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations) - What the VM install and Kubernetes (Helm) settings do, and how to migrate an existing installation
+- [`org-admin`](../org-admin/) - Find the super admin and create team orgs before you provision users into them
 - [`service-account-github-pat`](../service-account-github-pat/) - Act for many users from one account with per-conversation credentials
 - [`per-conversation-secrets`](../per-conversation-secrets/) - Inject secrets into a single conversation
 - [User provisioning endpoint (OpenHands #14864)](https://github.com/OpenHands/OpenHands/pull/14864) - The provisioning endpoint
