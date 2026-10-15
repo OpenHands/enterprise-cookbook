@@ -5,7 +5,7 @@ Create an [organization](https://docs.openhands.dev/openhands/usage/cloud/organi
 This is the building block for **OEM integrations**, where your own user-management system owns the user and organization lifecycle and mirrors it into OpenHands.
 
 > [!NOTE]
-> For how personal organizations, team organizations, and super admins work, see the [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview). For what the VM install and Kubernetes (Helm) settings do, see [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations).
+> For how personal workspaces, team organizations, and super admins work, see the [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview). For what the VM install and Kubernetes (Helm) settings do, see [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations).
 
 > [!IMPORTANT]
 > This example is **Enterprise-only**. The endpoints do not exist on OpenHands Cloud or the open-source build. The provisioning endpoint is also **off by default**, so an operator must enable it (see [Enabling the Feature](#enabling-the-feature)).

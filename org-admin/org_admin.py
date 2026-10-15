@@ -192,7 +192,7 @@ def cmd_invite(client: Client, args: argparse.Namespace) -> int:
     if result["successful"]:
         print(
             "Existing users are added at their next login; if they were on their "
-            "personal org they land in this one."
+            "personal workspace they land in this one."
         )
     return 1 if result["failed"] else 0
 

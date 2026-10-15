@@ -1,9 +1,9 @@
 # Super Admins and Organizations
 
-Every OpenHands Enterprise (OHE) user has a [personal organization](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#personal-and-team-organizations), and an install that predates organizations has only those. Creating a [team org](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#personal-and-team-organizations), and putting people in it, is an instance-level action that only a [**super admin**](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#super-admins) can take. This example is a small command-line tool for those steps, with the reasons behind each one.
+Every OpenHands Enterprise (OHE) user has a [personal workspace](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#personal-workspaces-and-team-organizations), and an install that predates organizations has only those. Creating a [team org](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#personal-workspaces-and-team-organizations), and putting people in it, is an instance-level action that only a [**super admin**](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview#super-admins) can take. This example is a small command-line tool for those steps, with the reasons behind each one.
 
 > [!NOTE]
-> For how personal organizations, team organizations, and super admins work, see the [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview). For what the VM install and Kubernetes (Helm) settings do, see [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations).
+> For how personal workspaces, team organizations, and super admins work, see the [Organizations Overview](https://docs.openhands.dev/openhands/usage/cloud/organizations/overview). For what the VM install and Kubernetes (Helm) settings do, see [Configuring Organizations](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations).
 
 ## How It Works
 
@@ -100,7 +100,7 @@ Pick one of the two.
 
 #### Invite
 
-Works for people who already have accounts. An existing user is added at their next login. If they were on their personal org, they land in the new one, and the personal org is still there. When no email provider is configured the tool prints the invite link to share.
+Works for people who already have accounts. An existing user is added at their next login. If they were on their personal workspace, they land in the new one, and the personal workspace is still there. When no email provider is configured the tool prints the invite link to share.
 
 ```bash
 python org_admin.py invite --org-id ORG_ID --role owner ada@example.com --yes
@@ -152,7 +152,7 @@ If it returns nothing, run the ordering from migration `138` to see who would be
 ## Things to Know
 
 - **Listing orgs only shows memberships.** `GET /api/organizations` returns orgs the caller belongs to. Keep the id from `create-org`, because a super admin cannot list the orgs it created.
-- **Personal orgs are not touched.** Nothing here moves or hides personal data. Hiding personal workspaces is a separate setting; see [Hide Personal Workspaces](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations#hide-personal-workspaces).
+- **Personal workspaces are not touched.** Nothing here moves or hides personal data. Hiding personal workspaces is a separate setting; see [Hide Personal Workspaces](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations#hide-personal-workspaces).
 - **The default-org flags change what a team org means.** See [Default Organization](https://docs.openhands.dev/openhands/usage/cloud/organizations/configuring-organizations#default-organization). If exactly one team org exists when `default_openhands_org_enabled` is later turned on, it is adopted as the default org, and with auto-add every user who signs in joins it. With more than one team org, the default-org bootstrap does nothing.
 - **Unclaimed git events follow the same rule.** They fall back to the default org only while exactly one team org exists.
 - **Org creation is for super admins only.** The chart value `openOrgCreation.enabled` is meant to open it up, but the `POST /api/organizations` route checks the super-admin permission and does not read it.
