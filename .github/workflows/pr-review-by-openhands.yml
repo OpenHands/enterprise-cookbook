@@ -34,7 +34,7 @@ jobs:
         env:
             # litellm 1.106.0 (2026-10-18) cannot import against the mcp 1.x that
             # openhands-sdk resolves. Drop once openhands-sdk caps litellm.
-            UV_EXCLUDE_NEWER: "2026-10-17T00:00:00Z"
+            UV_EXCLUDE_NEWER: '2026-10-17T00:00:00Z'
 
         steps:
             - name: Run PR Review
