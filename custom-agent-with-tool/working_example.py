@@ -6,9 +6,9 @@ Debugger) using the agent-server's `tool_module_qualnames` mechanism.
 
 How it works:
 1. Create a Cloud sandbox and get its agent-server URL + session key.
-2. Deploy the tool as an importable Python package inside the conversation's
-   working directory (`/workspace/rubber_duck/`) using the agent-server file
-   upload API. The working directory is on the agent-server's import path, so no
+2. Deploy the tool as an importable Python package in the agent-server's own
+   working directory (the sandbox spec's `working_dir`) using the agent-server
+   file upload API. That directory is on the agent-server's import path, so no
    `pip install` is required - and because the files are uploaded (not embedded
    in a shell heredoc) the tool source can contain anything without breaking.
 3. Create a conversation that lists the custom tool in `agent.tools` and maps it
@@ -128,19 +128,36 @@ def create_sandbox(api_key):
         "sandbox_id": sandbox_id,
         "agent_server": agent_server,
         "session_key": sandbox["session_api_key"],
+        "spec_id": sandbox["sandbox_spec_id"],
         "headers": headers,
     }
 
 
-def deploy_custom_tool(agent_server, session_key):
-    """Upload the tool as an importable package in the working directory.
+def get_import_dir(sandbox_info):
+    """Return the directory the agent-server imports tool modules from.
+
+    The agent-server puts its own working directory on its import path, and the
+    sandbox spec's `working_dir` is that directory on app servers 1.53.0 and later.
+    """
+    resp = requests.get(
+        f"{BASE_URL}/api/v1/sandbox-specs",
+        headers=sandbox_info["headers"],
+        params={"id": sandbox_info["spec_id"]},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()[0]["working_dir"]
+
+
+def deploy_custom_tool(agent_server, session_key, import_dir):
+    """Upload the tool as an importable package in the agent-server's cwd.
 
     Files are uploaded via the agent-server file API, so the tool source is never
     interpolated into a shell command - no delimiter/escaping pitfalls.
     """
     log("Deploying custom tool package...")
     headers = {"X-Session-API-Key": session_key}
-    pkg_dir = f"{WORKING_DIR}/{PKG_NAME}"
+    pkg_dir = f"{import_dir}/{PKG_NAME}"
 
     with open("custom_tool_definition.py", "rb") as f:
         tool_code = f.read()
@@ -334,6 +351,13 @@ def main():
         action="store_true",
         help="Keep the sandbox and conversation after finishing (for inspection).",
     )
+    parser.add_argument(
+        "--import-dir",
+        help=(
+            "Directory to deploy the tool into. Defaults to the sandbox spec's "
+            "working_dir. Use /workspace on app servers older than 1.53.0."
+        ),
+    )
     args = parser.parse_args()
 
     api_key, llm_key = check_env()
@@ -342,8 +366,12 @@ def main():
     try:
         sandbox_info = create_sandbox(api_key)
         log(f"  agent-server: {sandbox_info['agent_server']}")
+        import_dir = args.import_dir or get_import_dir(sandbox_info)
+        log(f"  import directory: {import_dir}")
 
-        deploy_custom_tool(sandbox_info["agent_server"], sandbox_info["session_key"])
+        deploy_custom_tool(
+            sandbox_info["agent_server"], sandbox_info["session_key"], import_dir
+        )
         conv_id = create_conversation_with_tool(
             sandbox_info["agent_server"], sandbox_info["session_key"], llm_key
         )
