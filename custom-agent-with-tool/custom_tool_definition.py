@@ -117,7 +117,7 @@ class BugRegistryTool(ToolDefinition[BugReport, BugFiling]):
     name: ClassVar[str] = "bug_registry"
 
     @classmethod
-    def create(cls, _conv_state=None) -> list["ToolDefinition"]:
+    def create(cls, conv_state=None) -> list["ToolDefinition"]:  # noqa: ARG003
         return [
             cls(
                 description=(

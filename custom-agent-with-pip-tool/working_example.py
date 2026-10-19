@@ -3,8 +3,9 @@
 
 This example demonstrates loading a custom tool from a **published Python package**
 (oh-markdown-tool) via pip install + tool_module_qualnames. The package is installed
-into the conversation's working directory (/workspace, which is on the agent-server's
-import path), then the agent-server imports it and registers the tool.
+into the agent-server's own working directory (the sandbox spec's working_dir, which
+is on the agent-server's import path), then the agent-server imports it and registers
+the tool.
 
 This is the natural evolution of custom-agent-with-tool: same loading mechanism
 (tool_module_qualnames), but the *deploy* step becomes "pip-install-into-working-dir"
@@ -127,24 +128,42 @@ def create_sandbox(api_key):
                 "id": sandbox_id,
                 "agent_server": agent_server_url,
                 "session_key": data["session_api_key"],
+                "spec_id": data["sandbox_spec_id"],
             }
     log("Sandbox failed to start in time", "[error]")
     sys.exit(1)
 
 
-def deploy_tool_package(agent_server, session_key):
-    """Install the published package into the sandbox working directory."""
+def get_import_dir(api_key, spec_id):
+    """Return the directory the agent-server imports tool modules from.
+
+    The agent-server puts its own working directory on its import path, and the
+    sandbox spec's `working_dir` is that directory on app servers 1.53.0 and later.
+    """
+    resp = requests.get(
+        f"{BASE_URL}/api/v1/sandbox-specs",
+        headers={"Authorization": f"Bearer {api_key}"},
+        params={"id": spec_id},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()[0]["working_dir"]
+
+
+def deploy_tool_package(agent_server, session_key, install_dir):
+    """Install the published package into the agent-server's working directory."""
     log("Deploying tool package via pip...")
     headers = {"X-Session-API-Key": session_key}
 
-    # Install into /workspace so the agent-server can import it. We skip dependencies
-    # that are already bundled in the frozen server (openhands-sdk, pydantic, rich) by
-    # installing with --no-deps, then installing only the non-bundled deps explicitly.
-    # For oh-markdown-tool[openhands], the bundled deps are openhands-sdk, pydantic,
-    # rich; the non-bundled are mdformat and pymarkdownlnt.
+    # Install into the agent-server's working directory so it can import the package.
+    # We skip dependencies that are already bundled in the frozen server
+    # (openhands-sdk, pydantic, rich) by installing with --no-deps, then installing
+    # only the non-bundled deps explicitly. For oh-markdown-tool[openhands], the
+    # bundled deps are openhands-sdk, pydantic, rich; the non-bundled are mdformat
+    # and pymarkdownlnt.
     install_cmd = (
-        f"pip install --target {WORKING_DIR} --no-deps {PACKAGE_SPEC} && "
-        f"pip install --target {WORKING_DIR} mdformat pymarkdownlnt"
+        f"pip install --target {install_dir} --no-deps {PACKAGE_SPEC} && "
+        f"pip install --target {install_dir} mdformat pymarkdownlnt"
     )
 
     resp = requests.post(
@@ -162,7 +181,7 @@ def deploy_tool_package(agent_server, session_key):
         )
         sys.exit(1)
 
-    log(f"  installed {PACKAGE_SPEC} into {WORKING_DIR}")
+    log(f"  installed {PACKAGE_SPEC} into {install_dir}")
     log(f"  tool module {TOOL_MODULE} is now importable")
 
 
@@ -343,13 +362,26 @@ def main():
         action="store_true",
         help="Keep the sandbox running after the demo (for inspection)",
     )
+    parser.add_argument(
+        "--install-dir",
+        help=(
+            "Directory to install the package into. Defaults to the sandbox "
+            "spec's working_dir. Use /workspace on app servers older than 1.53.0."
+        ),
+    )
     args = parser.parse_args()
 
     api_key, llm_key = check_env()
     sandbox_info = create_sandbox(api_key)
 
     try:
-        deploy_tool_package(sandbox_info["agent_server"], sandbox_info["session_key"])
+        install_dir = args.install_dir or get_import_dir(
+            api_key, sandbox_info["spec_id"]
+        )
+        log(f"  import directory: {install_dir}")
+        deploy_tool_package(
+            sandbox_info["agent_server"], sandbox_info["session_key"], install_dir
+        )
         create_sample_file(sandbox_info["agent_server"], sandbox_info["session_key"])
         conv_id = create_conversation(
             sandbox_info["agent_server"], sandbox_info["session_key"], llm_key
