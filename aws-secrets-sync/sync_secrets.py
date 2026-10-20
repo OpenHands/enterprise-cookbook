@@ -363,14 +363,17 @@ def sync(
             key = mapping_key(config, mapping)
             previous = journal.get(key)
             if previous and previous[1] in ("pending", "delete_pending"):
-                raise SyncError("Pending write; operator reconciliation required.")
+                raise SyncError(
+                    f"Pending write; operator reconciliation required. checkpoint={key}"
+                )
             if previous and previous[1] not in ("applied", "deleted"):
                 raise SyncError("Unknown journal status; reconciliation required.")
             present = mapping["name"] in names
             recovering = bool(previous and previous[1] == "deleted")
             if recovering and (personal or present):
                 raise SyncError(
-                    "Deleted checkpoint conflicts with destination; reconcile."
+                    "Deleted checkpoint conflicts with destination; reconcile. "
+                    f"checkpoint={key}"
                 )
             source = source_for_region(mapping["secret_arn"].split(":")[3])
             version = current_version(source, mapping["secret_arn"])
@@ -379,9 +382,13 @@ def sync(
                 if previous == (version, "applied"):
                     print(f"mapping {index}: checkpoint unchanged (not value-verified)")
                     continue
-                if not previous or not sync_existing:
+                if not previous:
                     raise SyncError(
-                        "Existing destination; rotation/adoption unsupported."
+                        "Existing destination is not owned by this journal."
+                    )
+                if not sync_existing:
+                    raise SyncError(
+                        "Source version changed; rerun with --sync to update."
                     )
                 replacing = True
             if (replacing or recovering) and not personal:

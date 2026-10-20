@@ -1,5 +1,5 @@
 ---
 title: AWS Secrets Sync
-description: Sync selected AWS secrets into personal or organization secrets with explicit rotation and recovery.
+description: Sync AWS Secrets Manager values through OpenHands APIs; adapt the source reader for other vaults.
 category: Secrets & authentication
 icon: key
