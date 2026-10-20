@@ -1,21 +1,28 @@
 # AWS Secrets Bootstrap
 
 Import explicitly selected AWS Secrets Manager strings into OpenHands Enterprise
-organization secrets. Use this as the starting point for a customer-owned sync
-job, including an existing Keeper-to-AWS workflow.
+organization secrets or one authenticated user's personal secrets. Use this as the
+starting point for a customer-owned import job, including an existing
+Keeper-to-AWS workflow.
 
 > [!WARNING]
-> Prototype: create-only. Existing destination values are never updated or deleted.
-> Rotation is detected and exits unsuccessfully until a supported atomic value
-> replacement API is available. This example is not an operated AWS connector.
+> Prototype: bootstrap only. Known existing destinations are refused; no deletion.
+> The personal API is an upsert, so personal mode requires exclusive write access
+> during the run to prevent a concurrent same-name write from being overwritten.
+> Source-version changes fail instead of replacing values. Production rotation
+> requires qualified replacement, concurrency, retry, and runtime refresh behavior.
+> This example is not an operated AWS connector.
 
 ## How It Works
 
-The script first verifies that the API key is bound to the configured organization
-using `bound_org_id`, lists OpenHands secret names, then describes each allowlisted AWS
+The script verifies the API key's organization binding using `bound_org_id`. Personal
+mode also requires its user ID to match `expected_user_id`. It lists destination
+names, then describes each allowlisted AWS
 secret's `AWSCURRENT` version. Dry run stops there without reading secret values.
 With `--apply`, it reads missing destinations' exact current versions, optionally
-extracts one top-level JSON string field, and creates organization secrets.
+extracts one top-level JSON string field, and creates the selected scope's secrets. The AWS reader and journal are shared;
+`OpenHands` and `PersonalOpenHands` contain the destination-specific API behavior.
+`destination_for()` is the adapter selection point for customer modifications.
 
 A private SQLite journal records the AWS version only after OpenHands acknowledges
 creation. Before sending a create, it records a pending operation. Timeouts,
@@ -31,8 +38,10 @@ are sent over HTTPS. Disable HTTP/SDK wire logging in the host environment.
   end-to-end qualification used Enterprise 1.68.0 with runtime 1.50.1. The
   instance included candidate changes; version numbers alone do not prove
   compatibility. Qualify your installation against the contracts below.
-- An organization-bound OpenHands API key with owner/admin permission to create
-  shared secrets. The current example does not create users, keys, or permissions.
+- An organization-bound OpenHands API key. Organization mode requires owner/admin
+  permission to create shared secrets. Personal mode uses the intended user's own
+  key and requires their independently verified user UUID. This script never
+  provisions users, creates keys, or changes permissions.
 - AWS credentials from the standard Boto3 credential chain. Prefer a workload role
   in deployment; `--profile` selects a local profile during development.
 - Read access to only the mapped ARNs: `secretsmanager:DescribeSecret` and
@@ -48,6 +57,9 @@ intended secret or field explicitly. The job does not discover an AWS account,
 expand a prefix, or copy unrelated credentials. Review the mapping with the vault
 owner before granting access. Secrets shared at organization scope are available
 to that organization's permitted consumers, rather than a single conversation.
+Personal scope targets a single user in the configured organization context.
+AWS names/tags do not automatically identify an OpenHands user: maintain that
+mapping explicitly, and scope the AWS read role to that user's allowlisted ARNs.
 
 Start from [`iam-policy.example.json`](./iam-policy.example.json), replacing its
 resource list with the exact full ARNs in your mapping. It grants no AWS writes
@@ -62,7 +74,8 @@ filter: AWS permission grants access to the entire source JSON secret.
 Run these commands from this example's directory. Copy
 [`mapping.example.json`](./mapping.example.json) to `mapping.local.json` and replace
 the origin, organization UUID, full ARN, and destination name. Omit `json_field`
-to copy the entire string; nested JSON paths and binary secrets are unsupported.
+to copy the entire string; nested JSON paths and binary secrets are unsupported. `scope` defaults to `organization` for
+compatibility with the original mapping format.
 Keep credentials out of the mapping. Supply `OH_API_KEY` through your environment
 or deployment's secret injection mechanism.
 
@@ -99,6 +112,49 @@ committed; this is not an all-or-nothing batch. Output identifies mapping number
 not values, ARNs, or API keys. `--state` chooses the journal file (default
 `.sync-state/journal.sqlite`); its directory must have mode `700`.
 
+## Personal Imports
+
+Use [`mapping.personal.example.json`](./mapping.personal.example.json) as the
+starting point. Set `scope` to `personal`, `expected_user_id` to the intended
+OpenHands user UUID, and `org_id` to the organization context in which they will
+use these secrets. Supply **that user's own organization-bound API key** through
+`OH_API_KEY`. Before any AWS reads, the script verifies both IDs against
+`GET /api/keys/current`. It does not accept an email as an identity or impersonate
+another user with an administrator key.
+
+```bash
+cp mapping.personal.example.json alice.local.json
+python sync_secrets.py --config alice.local.json --state .sync-state/alice/journal.sqlite
+python sync_secrets.py --config alice.local.json --state .sync-state/alice/journal.sqlite --apply
+```
+
+For ten people, maintain ten reviewed mapping files and run ten separate processes,
+each with that user's credential injected and a separate persistent journal.
+Configure three mappings per file if each person needs three values. The same
+secret name can be used by different users; the journal includes the destination
+user ID so their checkpoints cannot be exchanged. Store credentials through your
+job runner's secret injection, never in the mapping files or command arguments.
+Use a private directory and ignore your local mapping filenames in Git.
+
+The personal adapter lists every page of `/api/v1/secrets/search`, checks scope
+metadata, and refuses mapped names that collide with listed shared secrets.
+Invalid/repeated cursors or more than 100 pages fail before AWS value reads.
+Organization listings still fail on pagination because that endpoint exposes no
+pagination input in the qualified release.
+
+> [!WARNING]
+> The personal `POST /api/v1/secrets` endpoint can overwrite an existing value.
+> The script checks metadata first and refuses known existing destinations, but
+> the server has no qualified conditional-create contract. A competing writer
+> can create a value between the check and the POST. Use operator-invoked runs
+> with exclusive control of the selected personal names. The journal lock covers
+> this job's local workers; it cannot lock the UI or other clients.
+
+Personal rotation is deliberately refused by this bootstrap, even though the
+personal endpoint permits upsert. A production rotation adapter needs separately
+qualified concurrency/retry behavior and runtime refresh semantics. This example
+never automatically converts personal values into shared values.
+
 ## Retry And Recovery
 
 AWS reads use bounded SDK retries. OpenHands metadata reads retry transient
@@ -107,10 +163,10 @@ write retries after ambiguous outcomes. Error responses are not printed because
 servers can echo request values.
 
 Keep the same journal on a persistent local volume and run one writer per
-organization. The local lock only coordinates jobs using that same journal on the
+destination user/scope. The local lock only coordinates jobs using that same journal on the
 same machine. It is not a distributed lease. Separate jobs must not manage the
 same destination. Journal identity includes the origin, organization, source ARN,
-JSON field, and destination name, so a mapping change cannot inherit a checkpoint.
+JSON field, destination name, and (for personal mode) user ID and scope, so a mapping change cannot inherit a checkpoint.
 
 A pending write blocks that mapping on future runs, including dry runs. Have an
 operator inspect the destination metadata and request/audit evidence. A listed
@@ -125,7 +181,7 @@ writers and qualify a future ownership/version contract before production use.
 
 ## Rotation And Production Boundaries
 
-The tested organization `PUT` endpoint updates name/description only. Sending a
+For shared secrets, the tested organization `PUT` endpoint updates name/description only. Sending a
 value can succeed without replacing it. This example never uses that endpoint or
 delete/recreate. A changed AWS version or unknown existing destination fails before
 reading the value and leaves OpenHands unchanged.
@@ -180,9 +236,27 @@ and have its terminal hash the named environment variables and report only
 comparison booleans. Check the terminal observation, rather than relying on the
 agent's prose. Never use hashes of real low-entropy secrets as public evidence.
 
+Personal-mode qualification used three values each for two disposable users in the
+same organization: a whole string and two JSON fields per user. Both users used
+the same two destination names with different values, plus one unique name each.
+Initial imports, repeats, scope metadata, and wrong-user refusal passed. Actual
+agent terminal observations matched each user's three expected digests and
+confirmed the other user's unique secret was absent. No values were supplied as
+conversation overrides, and the shared organization store remained empty.
+An additional three-value test passed under an existing verified principal.
+
+The fake users were created separately through the optional Enterprise provisioning
+feature; real users do not need that feature enabled to run this script. The test
+secrets, runtime fixtures, and disposable organization were removed, and AWS
+fixtures scheduled for seven-day deletion. Fake IdP accounts were deleted and
+verified absent. The older lab lacked its documented application-account deletion
+API, so complete application-account metadata purge was not qualified. Provisioning
+and account lifecycle are outside this import script.
+
 Offline tests cover ambiguous writes, source failures, rotation refusal, mapping
 changes, partial recovery, multiple regions, JSON field types, key scope, malformed
-metadata, pagination refusal, redaction, redirects, and transient metadata retries:
+metadata, pagination handling, personal-scope payloads, wrong-user refusal,
+user/scope journal separation, redaction, redirects, and transient metadata retries:
 
 ```bash
 python -m pytest aws-secrets-sync/test_sync_secrets.py
@@ -200,9 +274,12 @@ and the repository's development dependencies.
 | OpenHands `GET /api/keys/current` | Verify effective and bound organization match the config |
 | OpenHands `GET /api/organizations/{org_id}/secrets` | List destination names without values |
 | OpenHands `POST /api/organizations/{org_id}/secrets` | Create a missing organization secret |
+| OpenHands `GET /api/v1/secrets/search` | Paginate personal and shared destination metadata |
+| OpenHands `POST /api/v1/secrets` | Write a personal secret as the authenticated user |
 
 The OpenHands adapter sends `X-Access-Token` and explicit `X-Org-Id`, verifies
-HTTPS, rejects redirects, and refuses incomplete paginated listings. It never
+HTTPS, rejects redirects, paginates personal listings, and refuses incomplete
+organization listings. It never
 changes the user's current organization. Deployments that omit `bound_org_id`
 are refused; do not substitute effective `org_id` as proof of binding. The
 qualified organization update schema accepts name/description only, and its list

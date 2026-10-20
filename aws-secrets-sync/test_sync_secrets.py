@@ -306,3 +306,142 @@ def test_multiple_regions_and_whole_strings(setup):
         "us-east-1",
         "eu-west-1",
     }
+
+
+USER = "00000000-0000-0000-0000-000000000002"
+
+
+def personal_client(setup):
+    config, _, _, _ = setup
+    config.update(scope="personal", expected_user_id=USER)
+    client = module.destination_for(config, "FAKE")
+    client.metadata = Mock()
+    return config, client
+
+
+def test_personal_adapter_explicit_scope_and_user_bound_journal(setup):
+    config, client = personal_client(setup)
+    assert isinstance(client, module.PersonalOpenHands)
+    assert client.url == config["base_url"] + "/api/v1/secrets"
+    assert client.create_payload("CANARY", VALUE) == {
+        "name": "CANARY",
+        "value": VALUE,
+        "scope": "personal",
+    }
+    mapping = config["mappings"][0]
+    alice = module.mapping_key(config, mapping)
+    config["expected_user_id"] = "00000000-0000-0000-0000-000000000003"
+    assert module.mapping_key(config, mapping) != alice
+    config.pop("scope")
+    assert module.mapping_key(config, mapping) != alice
+
+
+def test_personal_metadata_pagination_keeps_shared_names_to_avoid_shadowing(setup):
+    config, client = personal_client(setup)
+    client.metadata.side_effect = [
+        {"org_id": config["org_id"], "bound_org_id": config["org_id"], "user_id": USER},
+        {
+            "items": [{"name": "PERSONAL", "scope": "personal"}],
+            "next_page_id": "cursor&next",
+        },
+        {"items": [{"name": "SHARED", "scope": "organization"}], "next_page_id": None},
+    ]
+    assert client.names() == {"PERSONAL", "SHARED"}
+    assert "page_id=cursor%26next" in client.metadata.call_args.args[0]
+
+
+@pytest.mark.parametrize("bad_identity", ["user", "bound", "effective"])
+def test_personal_identity_mismatch_stops_before_source_reads(setup, bad_identity):
+    config, source, _, journal = setup
+    _, client = personal_client(setup)
+    identity = {
+        "org_id": config["org_id"],
+        "bound_org_id": config["org_id"],
+        "user_id": USER,
+    }
+    identity[
+        {"user": "user_id", "bound": "bound_org_id", "effective": "org_id"}[
+            bad_identity
+        ]
+    ] = "wrong"
+    client.metadata.return_value = identity
+    with pytest.raises(module.SyncError):
+        module.sync(config, lambda _region: source, client, journal, True)
+    source.describe_secret.assert_not_called()
+    source.get_secret_value.assert_not_called()
+    assert client.metadata.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        {"items": [{"name": "CANARY"}]},
+        {"items": [{"name": "CANARY", "scope": "invalid"}]},
+        {"items": [], "next_page_id": ""},
+        {"items": [], "next_page_id": 123},
+    ],
+)
+def test_personal_listing_fails_closed(setup, page):
+    config, client = personal_client(setup)
+    client.metadata.side_effect = [
+        {"org_id": config["org_id"], "bound_org_id": config["org_id"], "user_id": USER},
+        page,
+    ]
+    with pytest.raises(module.SyncError):
+        client.names()
+
+
+def test_personal_repeated_cursor_refused(setup):
+    config, client = personal_client(setup)
+    client.metadata.side_effect = [
+        {"org_id": config["org_id"], "bound_org_id": config["org_id"], "user_id": USER},
+        {"items": [], "next_page_id": "repeat"},
+        {"items": [], "next_page_id": "repeat"},
+    ]
+    with pytest.raises(module.SyncError, match="cursor"):
+        client.names()
+
+
+@pytest.mark.parametrize("change", ["missing_user", "invalid_user", "invalid_scope"])
+def test_personal_config_requires_explicit_identity(setup, tmp_path, change):
+    config, _ = personal_client(setup)
+    if change == "missing_user":
+        config.pop("expected_user_id")
+    elif change == "invalid_user":
+        config["expected_user_id"] = None
+    else:
+        config["scope"] = "all-users"
+    p = tmp_path / "mapping.json"
+    p.write_text(json.dumps(config))
+    with pytest.raises(module.SyncError):
+        module.load_config(p)
+
+
+def test_existing_org_checkpoint_identity_preserved(setup):
+    config, _, _, _ = setup
+    previous = module.mapping_key(config, config["mappings"][0])
+    config["scope"] = "organization"
+    assert module.mapping_key(config, config["mappings"][0]) == previous
+
+
+def test_personal_shared_name_cannot_inherit_personal_checkpoint(setup):
+    config, source, _, journal = setup
+    _, client = personal_client(setup)
+    journal.record(module.mapping_key(config, config["mappings"][0]), "v1", "applied")
+    client.metadata.side_effect = [
+        {"org_id": config["org_id"], "bound_org_id": config["org_id"], "user_id": USER},
+        {"items": [{"name": "CANARY", "scope": "organization"}], "next_page_id": None},
+    ]
+    with pytest.raises(module.SyncError, match="collides"):
+        module.sync(config, lambda _region: source, client, journal, True)
+    source.describe_secret.assert_not_called()
+
+
+def test_personal_create_posts_explicit_scope_without_user_override(setup):
+    _, client = personal_client(setup)
+    client.session = Mock()
+    client.session.post.return_value.status_code = 201
+    client.create("CANARY", VALUE)
+    body = client.session.post.call_args.kwargs["json"]
+    assert body == {"name": "CANARY", "value": VALUE, "scope": "personal"}
+    assert client.session.post.call_args.kwargs["allow_redirects"] is False

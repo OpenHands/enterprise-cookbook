@@ -1,2 +1,2 @@
 .sync-state/
-mapping.local.json
+*.local.json

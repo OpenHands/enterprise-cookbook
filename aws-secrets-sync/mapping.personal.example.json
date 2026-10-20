@@ -1,0 +1,13 @@
+{
+  "base_url": "https://openhands.example.com",
+  "org_id": "00000000-0000-0000-0000-000000000001",
+  "scope": "personal",
+  "expected_user_id": "00000000-0000-0000-0000-000000000002",
+  "mappings": [
+    {
+      "secret_arn": "arn:aws:secretsmanager:us-east-1:123456789012:secret:people/alice/dev-AbCdEf",
+      "json_field": "api_token",
+      "name": "DEVELOPMENT_TOKEN"
+    }
+  ]
+}

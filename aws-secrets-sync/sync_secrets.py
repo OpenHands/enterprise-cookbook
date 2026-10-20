@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Bootstrap AWS Secrets Manager strings into OpenHands organization secrets.
+"""Bootstrap AWS strings into OpenHands organization or personal secrets.
 
-Dry run by default. Existing values are never replaced or deleted. Checkpoints
+Dry run by default. Known existing values are refused; no deletion. Checkpoints
 record API acknowledgments, not verification of runtime delivery or secret values.
 """
 
@@ -16,7 +16,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 import boto3
@@ -31,12 +31,24 @@ class SyncError(Exception):
 
 def load_config(path: Path) -> dict:
     config = json.loads(path.read_text())
-    if not isinstance(config, dict) or set(config) != {
+    required = {
         "base_url",
         "org_id",
         "mappings",
-    }:
-        raise SyncError("Config requires base_url, org_id, and mappings only.")
+    }
+    if not isinstance(config, dict) or not (
+        required <= set(config) <= required | {"scope", "expected_user_id"}
+    ):
+        raise SyncError("Config requires origin, org, mappings, and known options.")
+    scope = config.get("scope", "organization")
+    if scope not in ("organization", "personal"):
+        raise SyncError("scope must be organization or personal.")
+    if scope == "personal" and "expected_user_id" not in config:
+        raise SyncError("Personal scope requires expected_user_id.")
+    if "expected_user_id" in config:
+        if not isinstance(config["expected_user_id"], str):
+            raise SyncError("expected_user_id must be a user UUID.")
+        config["expected_user_id"] = str(UUID(config["expected_user_id"]))
     if not isinstance(config["base_url"], str) or not isinstance(config["org_id"], str):
         raise SyncError("base_url and org_id must be strings.")
     url = urlsplit(config["base_url"])
@@ -85,7 +97,10 @@ def load_config(path: Path) -> dict:
 
 
 def mapping_key(config: dict, mapping: dict) -> str:
+    # Preserve existing organization checkpoints. Personal state is per user.
     payload = [config["base_url"], config["org_id"], mapping]
+    if config.get("scope") == "personal":
+        payload.extend(["personal", config["expected_user_id"]])
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -127,6 +142,7 @@ class OpenHands:
     def __init__(self, config: dict, token: str):
         self.origin = config["base_url"]
         self.org_id = config["org_id"]
+        self.expected_user_id = config.get("expected_user_id")
         self.url = (
             config["base_url"] + "/api/organizations/" + config["org_id"] + "/secrets"
         )
@@ -160,7 +176,7 @@ class OpenHands:
                 raise SyncError("Unexpected OpenHands metadata response.") from None
         raise SyncError("OpenHands metadata read exhausted retries.")
 
-    def names(self) -> set[str]:
+    def verify_identity(self):
         # Effective org_id alone does not prove a key is organization-bound.
         identity = self.metadata(self.origin + "/api/keys/current")
         if (
@@ -168,6 +184,11 @@ class OpenHands:
             or identity.get("org_id") != self.org_id
         ):
             raise SyncError("Use an API key bound to the configured organization.")
+        if self.expected_user_id and identity.get("user_id") != self.expected_user_id:
+            raise SyncError("API key user does not match expected_user_id.")
+
+    def names(self) -> set[str]:
+        self.verify_identity()
         page = self.metadata(self.url)
         # The tested endpoint returns a single page and has no page input.
         if page.get("next_page_id"):
@@ -185,13 +206,16 @@ class OpenHands:
             raise SyncError("Duplicate destination metadata; reconciliation required.")
         return names
 
+    def create_payload(self, name: str, value: str) -> dict:
+        return {"name": name, "value": value}
+
     def create(self, name: str, value: str):
         # Never retry a write without an idempotency contract. A timeout/409
         # cannot prove whether this writer created the value now in the store.
         try:
             response = self.session.post(
                 self.url,
-                json={"name": name, "value": value},
+                json=self.create_payload(name, value),
                 timeout=(10, 30),
                 allow_redirects=False,
             )
@@ -203,6 +227,67 @@ class OpenHands:
             raise SyncError(
                 f"Create HTTP {response.status_code}; reconcile pending state."
             )
+
+
+class PersonalOpenHands(OpenHands):
+    """One authenticated user per invocation; never impersonates another user.
+
+    Personal POST is an upsert. An exclusive writer is required to prevent
+    overwriting a same-name value created after our metadata snapshot.
+    """
+
+    def __init__(self, config: dict, token: str):
+        super().__init__(config, token)
+        if not self.expected_user_id:
+            raise SyncError("Personal scope requires expected_user_id.")
+        self.url = self.origin + "/api/v1/secrets"
+        self.mapping_names = {item["name"] for item in config["mappings"]}
+
+    def names(self) -> set[str]:
+        self.verify_identity()
+        names = set()
+        seen = set()
+        shared_names = set()
+        query: dict[str, str | int] = {"limit": 100}
+        for _ in range(100):
+            page = self.metadata(self.url + "/search?" + urlencode(query))
+            items = page.get("items")
+            if not isinstance(items, list):
+                raise SyncError("Unexpected personal metadata response.")
+            for item in items:
+                if (
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("name"), str)
+                    or not item["name"]
+                    or item.get("scope") not in ("personal", "organization")
+                ):
+                    raise SyncError("Unexpected personal metadata response.")
+                # Include shared names too: conservatively refuse shadowing.
+                if item["name"] in names:
+                    raise SyncError("Duplicate destination metadata.")
+                names.add(item["name"])
+                if item["scope"] == "organization":
+                    shared_names.add(item["name"])
+            cursor = page.get("next_page_id")
+            if cursor is None:
+                if self.mapping_names & shared_names:
+                    raise SyncError("Mapped name collides with a shared secret.")
+                return names
+            if not isinstance(cursor, str) or not cursor or cursor in seen:
+                raise SyncError("Invalid/repeated personal metadata cursor.")
+            seen.add(cursor)
+            query["page_id"] = cursor
+        raise SyncError("Personal metadata page limit exceeded.")
+
+    def create_payload(self, name: str, value: str) -> dict:
+        return {"name": name, "value": value, "scope": "personal"}
+
+
+def destination_for(config: dict, token: str) -> OpenHands:
+    """Extension point for customer-owned destination adapters."""
+    if config.get("scope", "organization") == "personal":
+        return PersonalOpenHands(config, token)
+    return OpenHands(config, token)
 
 
 def current_version(client, arn: str) -> str:
@@ -327,7 +412,11 @@ def main():
             return clients[region]
 
         return sync(
-            config, source_for_region, OpenHands(config, token), journal, args.apply
+            config,
+            source_for_region,
+            destination_for(config, token),
+            journal,
+            args.apply,
         )
     except SyncError as exc:
         print(str(exc), file=sys.stderr)
