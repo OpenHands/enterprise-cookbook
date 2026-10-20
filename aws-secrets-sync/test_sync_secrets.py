@@ -445,3 +445,144 @@ def test_personal_create_posts_explicit_scope_without_user_override(setup):
     body = client.session.post.call_args.kwargs["json"]
     assert body == {"name": "CANARY", "value": VALUE, "scope": "personal"}
     assert client.session.post.call_args.kwargs["allow_redirects"] is False
+
+
+def rotation_setup(setup, personal=False):
+    config, source, dest, journal = setup
+    if personal:
+        config.update(
+            scope="personal", expected_user_id="00000000-0000-0000-0000-000000000002"
+        )
+    assert run(setup) == 0
+    dest.names.return_value = {"CANARY"}
+    source.describe_secret.return_value["VersionIdsToStages"] = {"v2": ["AWSCURRENT"]}
+    source.get_secret_value.return_value.update(
+        VersionId="v2", SecretString=json.dumps({"token": VALUE + "-2"})
+    )
+    source.get_secret_value.reset_mock()
+    dest.create.reset_mock()
+    return config, source, dest, journal
+
+
+def rotate(setup, apply=True, allow=True):
+    config, source, dest, journal = setup
+    return module.sync(config, lambda _: source, dest, journal, apply, True, allow)
+
+
+def test_personal_rotation_upserts_without_delete(setup):
+    config, source, dest, journal = rotation_setup(setup, personal=True)
+    assert rotate(setup, allow=False) == 0
+    dest.create.assert_called_once_with("CANARY", VALUE + "-2")
+    dest.delete.assert_not_called()
+    assert journal.get(module.mapping_key(config, config["mappings"][0])) == (
+        "v2",
+        "applied",
+    )
+
+
+def test_org_rotation_requires_opt_in_before_read(setup):
+    _, source, dest, _ = rotation_setup(setup)
+    assert rotate(setup, allow=False) == 1
+    source.get_secret_value.assert_not_called()
+    dest.delete.assert_not_called()
+
+
+def test_rotation_dry_run_never_reads_or_mutates(setup):
+    _, source, dest, _ = rotation_setup(setup)
+    assert rotate(setup, apply=False) == 0
+    source.get_secret_value.assert_not_called()
+    dest.delete.assert_not_called()
+    dest.create.assert_not_called()
+
+
+def test_org_rotation_order_and_durable_phases(setup):
+    config, source, dest, journal = rotation_setup(setup)
+    key = module.mapping_key(config, config["mappings"][0])
+
+    def delete(name):
+        assert name == "CANARY"
+        assert source.get_secret_value.call_count == 1
+        assert journal.get(key) == ("v2", "delete_pending")
+
+    def create(name, value):
+        assert name == "CANARY" and value == VALUE + "-2"
+        assert dest.delete.call_count == 1
+        assert journal.get(key) == ("v2", "pending")
+
+    dest.delete.side_effect = delete
+    dest.create.side_effect = create
+    assert rotate(setup) == 0
+    assert journal.get(key) == ("v2", "applied")
+
+
+def test_invalid_rotated_value_does_not_delete(setup):
+    _, source, dest, _ = rotation_setup(setup)
+    source.get_secret_value.return_value["SecretString"] = "{}"
+    assert rotate(setup) == 1
+    dest.delete.assert_not_called()
+
+
+@pytest.mark.parametrize("phase", ["pending", "delete_pending"])
+def test_uncertain_rotation_never_retries_even_when_name_absent(setup, phase):
+    config, source, dest, journal = rotation_setup(setup)
+    journal.record(module.mapping_key(config, config["mappings"][0]), "v2", phase)
+    dest.names.return_value = set()
+    assert rotate(setup) == 1
+    source.get_secret_value.assert_not_called()
+    dest.create.assert_not_called()
+    dest.delete.assert_not_called()
+
+
+def test_deleted_checkpoint_recovers_latest_version_without_second_delete(setup):
+    config, _, dest, journal = rotation_setup(setup)
+    key = module.mapping_key(config, config["mappings"][0])
+    journal.record(key, "earlier-version", "deleted")
+    dest.names.return_value = set()
+    assert rotate(setup) == 0
+    dest.delete.assert_not_called()
+    dest.create.assert_called_once_with("CANARY", VALUE + "-2")
+    assert journal.get(key) == ("v2", "applied")
+
+
+def test_deleted_checkpoint_conflict_blocks_writes(setup):
+    config, source, dest, journal = rotation_setup(setup)
+    journal.record(module.mapping_key(config, config["mappings"][0]), "v2", "deleted")
+    assert rotate(setup) == 1
+    source.get_secret_value.assert_not_called()
+    dest.delete.assert_not_called()
+    dest.create.assert_not_called()
+
+
+def test_unknown_existing_still_refused_with_rotation_enabled(setup):
+    _, source, dest, _ = setup
+    dest.names.return_value = {"CANARY"}
+    assert rotate(setup) == 1
+    source.get_secret_value.assert_not_called()
+    dest.delete.assert_not_called()
+
+
+def test_ambiguous_delete_persists_and_blocks(setup):
+    config, _, dest, journal = rotation_setup(setup)
+    dest.delete.side_effect = module.SyncError("Delete outcome uncertain")
+    assert rotate(setup) == 1
+    assert journal.get(module.mapping_key(config, config["mappings"][0])) == (
+        "v2",
+        "delete_pending",
+    )
+    dest.names.return_value = set()
+    assert rotate(setup) == 1
+    assert dest.delete.call_count == 1
+    dest.create.assert_not_called()
+
+
+def test_delete_transport_no_retry_or_response_body(setup):
+    config, _, _, _ = setup
+    destination = module.OpenHands(config, "FAKE")
+    destination.session = Mock()
+    destination.session.delete.side_effect = requests.Timeout(VALUE)
+    with pytest.raises(module.SyncError) as exc:
+        destination.delete("CANARY")
+    assert VALUE not in str(exc.value)
+    destination.session.delete.assert_called_once_with(
+        destination.url + "/CANARY", timeout=(10, 30), allow_redirects=False
+    )

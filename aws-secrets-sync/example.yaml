@@ -1,5 +1,5 @@
 ---
-title: AWS Secrets Bootstrap
-description: Bootstrap selected AWS secrets into organization or personal secrets with a bootstrap reference script.
+title: AWS Secrets Sync
+description: Sync selected AWS secrets into personal or organization secrets with explicit rotation and recovery.
 category: Secrets & authentication
 icon: key

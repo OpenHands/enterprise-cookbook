@@ -1,17 +1,15 @@
-# AWS Secrets Bootstrap
+# AWS Secrets Sync
 
 Import explicitly selected AWS Secrets Manager strings into OpenHands Enterprise
 organization secrets or one authenticated user's personal secrets. Use this as the
-starting point for a customer-owned import job, including an existing
+starting point for a customer-owned recurring sync job, including an existing
 Keeper-to-AWS workflow.
 
 > [!WARNING]
-> Prototype: bootstrap only. Known existing destinations are refused; no deletion.
-> The personal API is an upsert, so personal mode requires exclusive write access
-> during the run to prevent a concurrent same-name write from being overwritten.
-> Source-version changes fail instead of replacing values. Production rotation
-> requires qualified replacement, concurrency, retry, and runtime refresh behavior.
-> This example is not an operated AWS connector.
+> Prototype: rotation uses an exclusive writer and a persistent journal. Personal
+> values use upsert. Shared value replacement requires explicit delete/recreate
+> permission and leaves a temporary availability gap. Uncertain writes require
+> operator reconciliation. This example is not an operated AWS connector.
 
 ## How It Works
 
@@ -23,9 +21,12 @@ With `--apply`, it reads missing destinations' exact current versions, optionall
 extracts one top-level JSON string field, and creates the selected scope's secrets. The AWS reader and journal are shared;
 `OpenHands` and `PersonalOpenHands` contain the destination-specific API behavior.
 `destination_for()` is the adapter selection point for customer modifications.
+Add `--sync` to update journal-owned destinations when their AWS version changes.
+Shared replacements also require `--allow-delete-recreate`. Unknown existing
+destinations are always refused; the script never automatically adopts them.
 
 A private SQLite journal records the AWS version only after OpenHands acknowledges
-creation. Before sending a create, it records a pending operation. Timeouts,
+creation or replacement. Before sending a create/upsert, it records a pending operation. Timeouts,
 conflicts, and rejected requests leave that operation pending for operator review.
 A later run refuses to guess whether the value was installed. No values or tokens
 are intentionally logged or written to state; values exist in process memory and
@@ -39,7 +40,7 @@ are sent over HTTPS. Disable HTTP/SDK wire logging in the host environment.
   instance included candidate changes; version numbers alone do not prove
   compatibility. Qualify your installation against the contracts below.
 - An organization-bound OpenHands API key. Organization mode requires owner/admin
-  permission to create shared secrets. Personal mode uses the intended user's own
+  permission to create/delete shared secrets. Personal mode uses the intended user's own
   key and requires their independently verified user UUID. This script never
   provisions users, creates keys, or changes permissions.
 - AWS credentials from the standard Boto3 credential chain. Prefer a workload role
@@ -51,7 +52,7 @@ are sent over HTTPS. Disable HTTP/SDK wire logging in the host environment.
 ## Source Scope And IAM
 
 The mapping file is the complete allowlist. Every entry is attempted on each run;
-only entries needing creation read values. Multiple fields from the same JSON
+only entries needing creation or an authorized update read values. Multiple fields from the same JSON
 secret need separate mappings and distinct destination names. Include every
 intended secret or field explicitly. The job does not discover an AWS account,
 expand a prefix, or copy unrelated credentials. Review the mapping with the vault
@@ -144,21 +145,50 @@ pagination input in the qualified release.
 
 > [!WARNING]
 > The personal `POST /api/v1/secrets` endpoint can overwrite an existing value.
-> The script checks metadata first and refuses known existing destinations, but
+> The script checks metadata first and refuses unknown existing destinations, but
 > the server has no qualified conditional-create contract. A competing writer
-> can create a value between the check and the POST. Use operator-invoked runs
+> can create a value between the check and the POST. Use runs
 > with exclusive control of the selected personal names. The journal lock covers
 > this job's local workers; it cannot lock the UI or other clients.
 
-Personal rotation is deliberately refused by this bootstrap, even though the
-personal endpoint permits upsert. A production rotation adapter needs separately
-qualified concurrency/retry behavior and runtime refresh semantics. This example
-never automatically converts personal values into shared values.
+Personal rotation uses that same upsert endpoint when `--sync` is enabled and the
+journal already owns the mapping. It never deletes the personal entry first or
+automatically converts personal values into shared values.
+
+## Weekly Sync
+
+Preview a shared-secret update, then apply it explicitly:
+
+```bash
+python sync_secrets.py --config mapping.local.json --sync --allow-delete-recreate
+python sync_secrets.py --config mapping.local.json --sync --allow-delete-recreate --apply
+```
+
+For personal secrets:
+
+```bash
+python sync_secrets.py --config alice.local.json --state .sync-state/alice/journal.sqlite --sync --apply
+```
+
+Your scheduler can run the appropriate apply command weekly (for example, Mondays
+at 09:00). Use absolute paths, a persistent private journal, the same reviewed
+mapping, and credentials injected by the job runner. Alert on any nonzero exit.
+Run one job per user for personal secrets; do not give an administrator key to a
+loop that attempts to impersonate users. A weekly cadence means a source change
+can wait up to a week before the next successful sync; choose a shorter cadence
+if the credential's validity window requires it. This example installs no scheduler.
+
+On each run, an unchanged AWS version and present destination are skipped. A
+changed version updates only mappings with an applied checkpoint. Missing entries
+can be recreated. Unknown pre-existing entries, changed mapping identities, and
+uncertain requests require operator review. Source deletion and removed mappings
+do not delete destination entries. This is source-version synchronization; the
+write-only destination contract cannot detect out-of-band value changes.
 
 ## Retry And Recovery
 
 AWS reads use bounded SDK retries. OpenHands metadata reads retry transient
-failures. Creates are sent once; there is no idempotency contract allowing safe
+failures. Creates, upserts, and deletes are each sent once; there is no idempotency contract allowing safe
 write retries after ambiguous outcomes. Error responses are not printed because
 servers can echo request values.
 
@@ -168,12 +198,23 @@ same machine. It is not a distributed lease. Separate jobs must not manage the
 same destination. Journal identity includes the origin, organization, source ARN,
 JSON field, destination name, and (for personal mode) user ID and scope, so a mapping change cannot inherit a checkpoint.
 
-A pending write blocks that mapping on future runs, including dry runs. Have an
-operator inspect the destination metadata and request/audit evidence. A listed
-name cannot prove the value or writer. This prototype has no automatic adoption,
-reset, or pending-state repair command. Do not erase state to bypass uncertainty;
-resolve ownership and recovery before resuming. A lost journal also causes
-existing destinations to be refused.
+The journal records these durable phases:
+
+| Status | Meaning And Next Action |
+| --- | --- |
+| `applied` | API acknowledged the installed source version; normal sync can continue |
+| `delete_pending` | DELETE may have been sent; stop for operator reconciliation |
+| `deleted` | DELETE acknowledged and no POST attempted; an absent entry can safely resume with the latest AWS value and both shared-rotation flags |
+| `pending` | Create/upsert may have been sent; stop for operator reconciliation |
+
+A pending write blocks that mapping on future runs, including dry runs. Even if
+metadata shows the name absent, a delayed DELETE or POST could still arrive; the
+script does not retry it automatically. A `deleted` checkpoint with a present
+entry also blocks because another writer may have intervened. Have an operator
+inspect metadata and request/audit evidence. A listed name cannot prove its value
+or writer. This prototype has no automatic adoption, reset, or ambiguous-state
+repair command. Do not erase state to bypass uncertainty. A lost journal also
+causes existing destinations to be refused.
 
 Unchanged checkpoints are acknowledgments, not ongoing reconciliation: this script
 cannot detect someone replacing the destination value out of band. Restrict other
@@ -181,27 +222,32 @@ writers and qualify a future ownership/version contract before production use.
 
 ## Rotation And Production Boundaries
 
-For shared secrets, the tested organization `PUT` endpoint updates name/description only. Sending a
-value can succeed without replacing it. This example never uses that endpoint or
-delete/recreate. A changed AWS version or unknown existing destination fails before
-reading the value and leaves OpenHands unchanged.
+For shared secrets, the tested organization `PUT` endpoint updates name/description
+only. Sending a value can succeed without replacing it. The adapter therefore
+uses DELETE followed by POST only with `--sync --allow-delete-recreate`.
+It reads and validates the new AWS value **before** deleting the old entry.
+There is a non-atomic gap: a new conversation started in that gap can lack the
+secret, and a failed create can leave it absent until recovery. The job never
+stores the old plaintext for rollback. An uncertain request deliberately stops
+for operator review instead of risking a late request removing a new value.
 
-Add a separately tested atomic-replacement adapter when OpenHands provides the
-supported contract. It needs retry/idempotency, concurrency, and unknown-outcome
-semantics before recurring synchronization is enabled. Do not infer support just
-from an endpoint accepting a `value` field.
+The API provides no qualified compare-and-swap or write idempotency contract.
+Restrict UI/other API writers for managed names. A local lock cannot enforce that
+policy across other clients. Use an atomic-replacement adapter when a supported
+contract becomes available; do not infer support from accepting a `value` field.
 
-Store updates also do not establish running-agent refresh. Qualification on
-Enterprise 1.71.0 / runtime 1.50.1 found running conversations retained static
-values after rotation and deletion. Immutable organization binding, runtime
+Store updates also do not establish running-agent refresh. Rotation qualification
+on Enterprise 1.68.0 candidate / runtime 1.50.1 confirmed the existing conversation
+retained all old personal/shared values while a new conversation received the
+new values. Earlier deletion tests also found static values persisted. Immutable organization binding, runtime
 rotation/revocation behavior, automation delivery, scoped sync authorization, and
 audit/redaction coverage remain production qualification requirements.
 
 For customer deployment, agree on allowed users and consumers, polling cadence,
 rotation SLA, alerting and on-call ownership, and the journal's backup/recovery
 process. Your organization owns the upstream vault synchronization and job operation;
-OpenHands owns the API and runtime contract. Start with operator-invoked runs.
-This example installs no scheduler and never propagates source deletion, removed
+OpenHands owns the API and runtime contract. Start with supervised runs before enabling your weekly job.
+This example never propagates source deletion, removed
 mappings, or failed AWS reads as destination deletion. Define an explicit removal
 and credential-revocation process before production.
 
@@ -218,7 +264,7 @@ Enterprise 1.68.0 candidate installation with runtime 1.50.1:
 | Partial recovery | Corrected source field imported; prior successes skipped |
 | Repeated run | All four checkpoints skipped; destination contained every intended name |
 | Agent consumption | Actual terminal observations matched all four SHA-256 digests; only booleans printed |
-| Source rotation | Import refused replacement and preserved destination metadata |
+| Source rotation in bootstrap mode | Import refused replacement and preserved destination metadata |
 | Mapping removal / scheduled AWS deletion | Destination entries preserved; no automatic deletion |
 | Manual store deletion | Existing conversation retained the value; a new conversation lacked it |
 
@@ -253,7 +299,13 @@ verified absent. The older lab lacked its documented application-account deletio
 API, so complete application-account metadata purge was not qualified. Provisioning
 and account lifecycle are outside this import script.
 
-Offline tests cover ambiguous writes, source failures, rotation refusal, mapping
+Recurring-sync qualification on the same candidate installation additionally
+rotated synthetic shared and personal values, checked new-conversation terminal
+digests, and resumed a shared entry after an injected local interruption between
+acknowledged deletion and the first POST. Repeated runs skipped the new versions.
+Unknown existing entries and uncertain write outcomes remain refused.
+
+Offline tests cover ambiguous writes, source failures, opt-in rotation, mapping
 changes, partial recovery, multiple regions, JSON field types, key scope, malformed
 metadata, pagination handling, personal-scope payloads, wrong-user refusal,
 user/scope journal separation, redaction, redirects, and transient metadata retries:
@@ -270,10 +322,11 @@ and the repository's development dependencies.
 | API | Purpose |
 | --- | --- |
 | AWS `DescribeSecret` | Locate the single `AWSCURRENT` version without reading values |
-| AWS `GetSecretValue` | Read that exact version when creating a missing destination |
+| AWS `GetSecretValue` | Read that exact version before creating or updating a destination |
 | OpenHands `GET /api/keys/current` | Verify effective and bound organization match the config |
 | OpenHands `GET /api/organizations/{org_id}/secrets` | List destination names without values |
-| OpenHands `POST /api/organizations/{org_id}/secrets` | Create a missing organization secret |
+| OpenHands `POST /api/organizations/{org_id}/secrets` | Create a missing/replacement organization secret |
+| OpenHands `DELETE /api/organizations/{org_id}/secrets/{secret_name}` | Delete before explicitly authorized shared replacement |
 | OpenHands `GET /api/v1/secrets/search` | Paginate personal and shared destination metadata |
 | OpenHands `POST /api/v1/secrets` | Write a personal secret as the authenticated user |
 

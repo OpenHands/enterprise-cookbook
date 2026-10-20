@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Bootstrap AWS strings into OpenHands organization or personal secrets.
+"""Sync allowlisted AWS strings into OpenHands organization or personal secrets.
 
-Dry run by default. Known existing values are refused; no deletion. Checkpoints
-record API acknowledgments, not verification of runtime delivery or secret values.
+Dry run by default. Rotation requires --sync; organization replacement also needs
+--allow-delete-recreate. Checkpoints record acknowledgments, not value verification.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 from uuid import UUID
 
 import boto3
@@ -228,6 +228,23 @@ class OpenHands:
                 f"Create HTTP {response.status_code}; reconcile pending state."
             )
 
+    def delete(self, name: str):
+        # A delayed DELETE could remove a later replacement. Never retry it.
+        try:
+            response = self.session.delete(
+                self.url + "/" + quote(name, safe=""),
+                timeout=(10, 30),
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            raise SyncError(
+                "Delete outcome uncertain; reconcile delete_pending state."
+            ) from None
+        if response.status_code not in (200, 204):
+            raise SyncError(
+                f"Delete HTTP {response.status_code}; reconcile delete_pending state."
+            )
+
 
 class PersonalOpenHands(OpenHands):
     """One authenticated user per invocation; never impersonates another user.
@@ -329,36 +346,80 @@ def read_value(client, mapping: dict, version: str) -> str:
     return value
 
 
-def sync(config: dict, source_for_region, destination, journal: Journal, apply=False):
+def sync(
+    config: dict,
+    source_for_region,
+    destination,
+    journal: Journal,
+    apply=False,
+    sync_existing=False,
+    allow_delete_recreate=False,
+):
     names = destination.names()
+    personal = config.get("scope") == "personal"
     failures = 0
     for index, mapping in enumerate(config["mappings"], start=1):
         try:
             key = mapping_key(config, mapping)
             previous = journal.get(key)
-            if previous and previous[1] == "pending":
+            if previous and previous[1] in ("pending", "delete_pending"):
                 raise SyncError("Pending write; operator reconciliation required.")
+            if previous and previous[1] not in ("applied", "deleted"):
+                raise SyncError("Unknown journal status; reconciliation required.")
+            present = mapping["name"] in names
+            recovering = bool(previous and previous[1] == "deleted")
+            if recovering and (personal or present):
+                raise SyncError(
+                    "Deleted checkpoint conflicts with destination; reconcile."
+                )
             source = source_for_region(mapping["secret_arn"].split(":")[3])
             version = current_version(source, mapping["secret_arn"])
-            if mapping["name"] in names:
+            replacing = False
+            if present:
                 if previous == (version, "applied"):
                     print(f"mapping {index}: checkpoint unchanged (not value-verified)")
                     continue
-                raise SyncError("Existing destination; rotation/adoption unsupported.")
+                if not previous or not sync_existing:
+                    raise SyncError(
+                        "Existing destination; rotation/adoption unsupported."
+                    )
+                replacing = True
+            if (replacing or recovering) and not personal:
+                if not sync_existing or not allow_delete_recreate:
+                    raise SyncError(
+                        "Organization rotation requires --sync --allow-delete-recreate."
+                    )
+            action = (
+                "recover create"
+                if recovering
+                else (
+                    "personal upsert"
+                    if replacing and personal
+                    else ("delete/recreate" if replacing else "create")
+                )
+            )
             if not apply:
-                print(f"mapping {index}: would create (value not read)")
+                print(f"mapping {index}: would {action} (value not read)")
                 continue
+            # Validate the exact source value before making any destructive call.
             value = read_value(source, mapping, version)
+            if replacing and not personal:
+                journal.record(key, version, "delete_pending")
+                destination.delete(mapping["name"])
+                journal.record(key, version, "deleted")
+                names.discard(mapping["name"])
+            # Only acknowledged DELETE + no attempted POST is safe to resume.
+            # Once POST is attempted, any uncertainty must block future runs.
             journal.record(key, version, "pending")
             destination.create(mapping["name"], value)
             journal.record(key, version, "applied")
             del value
             names.add(mapping["name"])
-            print(f"mapping {index}: create acknowledged")
+            print(f"mapping {index}: {action} acknowledged")
         except (BotoCoreError, ClientError):
             failures += 1
             print(
-                f"mapping {index}: AWS read failed; destination unchanged",
+                f"mapping {index}: AWS read failed; no destination write attempted",
                 file=sys.stderr,
             )
         except SyncError as exc:
@@ -374,10 +435,20 @@ def main():
         "--state", type=Path, default=Path(".sync-state/journal.sqlite")
     )
     parser.add_argument("--profile", help="Optional AWS named profile")
+    parser.add_argument("--apply", action="store_true", help="Apply planned writes")
     parser.add_argument(
-        "--apply", action="store_true", help="Create missing destinations"
+        "--sync",
+        action="store_true",
+        help="Update journal-owned mappings when AWS versions change",
+    )
+    parser.add_argument(
+        "--allow-delete-recreate",
+        action="store_true",
+        help="Allow non-atomic organization replacement; requires --sync",
     )
     args = parser.parse_args()
+    if args.allow_delete_recreate and not args.sync:
+        parser.error("--allow-delete-recreate requires --sync")
     journal = None
     lock_fd = None
     try:
@@ -417,6 +488,8 @@ def main():
             destination_for(config, token),
             journal,
             args.apply,
+            args.sync,
+            args.allow_delete_recreate,
         )
     except SyncError as exc:
         print(str(exc), file=sys.stderr)

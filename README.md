@@ -49,7 +49,7 @@ Inject credentials and manage identity.
 |---------|-------------|
 | [per-conversation-secrets](./per-conversation-secrets/) | Inject per-conversation secrets via REST API — both as bash env vars and to template an **MCP server** config (`.mcp.json`) bundled in a plugin |
 | [service-account-github-pat](./service-account-github-pat/) | Use one OpenHands SaaS account as a **service account**, overriding the managed `GITHUB_TOKEN` with each user's GitHub PAT per conversation |
-| [aws-secrets-sync](./aws-secrets-sync/) | **Prototype:** Bootstrap allowlisted AWS secrets into organization or personal scope; rotation requires qualification |
+| [aws-secrets-sync](./aws-secrets-sync/) | **Prototype:** Sync allowlisted AWS secrets into personal or organization scope with opt-in rotation and durable recovery |
 | [gpg-commit-signing](./gpg-commit-signing/) | Configure **GPG commit signing** on **every** conversation (not just when a repo is selected) with a `SessionStart` hook that imports a key from a custom secret |
 
 ### Onboarding & org admin
