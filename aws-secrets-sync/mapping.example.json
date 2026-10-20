@@ -1,0 +1,11 @@
+{
+  "base_url": "https://openhands.example.com",
+  "org_id": "00000000-0000-0000-0000-000000000001",
+  "mappings": [
+    {
+      "secret_arn": "arn:aws:secretsmanager:us-east-1:123456789012:secret:demo/application-AbCdEf",
+      "json_field": "api_token",
+      "name": "APPLICATION_TOKEN"
+    }
+  ]
+}

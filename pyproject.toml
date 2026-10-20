@@ -14,6 +14,7 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+    "boto3>=1.35,<2",
     "pre-commit>=4.0.0",
     "pyright>=1.1.390",
     "pytest>=8.0.0",
@@ -57,7 +58,7 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.pytest.ini_options]
-testpaths = ["conversation-metrics/tests", "org-admin/tests"]
+testpaths = ["conversation-metrics/tests", "org-admin/tests", "aws-secrets-sync"]
 pythonpath = ["org-admin"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
@@ -65,7 +66,7 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
 [tool.pyright]
-include = ["conversation-metrics/oh_api", "conversation-metrics/tests", "org-admin"]
+include = ["conversation-metrics/oh_api", "conversation-metrics/tests", "org-admin", "aws-secrets-sync"]
 extraPaths = ["conversation-metrics", "org-admin"]
 pythonVersion = "3.10"
 typeCheckingMode = "standard"
