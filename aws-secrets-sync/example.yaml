@@ -1,0 +1,5 @@
+---
+title: AWS Secrets Bootstrap
+description: Bootstrap selected AWS secrets into organization secrets with a create-only reference script.
+category: Secrets & authentication
+icon: key
