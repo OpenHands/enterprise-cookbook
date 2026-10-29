@@ -279,7 +279,8 @@ class PersonalOpenHands(OpenHands):
                     or item.get("scope") not in ("personal", "organization")
                 ):
                     raise SyncError("Unexpected personal metadata response.")
-                # Include shared names too: conservatively refuse shadowing.
+                # Refuse currently listed shared names. A later collision can
+                # appear as NAME_2 and escape this check; see README collisions.
                 if item["name"] in names:
                     raise SyncError("Duplicate destination metadata.")
                 names.add(item["name"])

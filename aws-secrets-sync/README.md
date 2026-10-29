@@ -1,118 +1,240 @@
 # AWS Secrets Sync
 
-Sync selected AWS Secrets Manager values into OpenHands Enterprise personal or
-organization secrets. **AWS is the working example:** this is a customer-owned
-Python script using vault and OpenHands APIs, and you can adapt the source reader
-to another secrets manager. No managed connector or scheduler is installed.
+A Python script you run on your own scheduler. It reads explicitly mapped AWS
+Secrets Manager values, writes them through OpenHands secrets APIs, and updates
+them when AWS rotates them. AWS is the working example: you can adapt the source
+reader to another secrets manager. Nothing is installed in OpenHands.
 
-## Setup
+## How It Works
 
-Use Python 3.10+ on Linux or macOS, then install the dependencies:
+```mermaid
+sequenceDiagram
+    participant S as Scheduler
+    participant P as Sync script
+    participant J as SQLite journal
+    participant A as AWS Secrets Manager
+    participant O as OpenHands API
+    S->>P: Run with mapping and OH_API_KEY
+    P->>O: Verify key binding; list secret names
+    loop Each mapping
+        P->>J: Read checkpoint
+        P->>A: Describe AWSCURRENT version
+        alt Missing or authorized changed version, with --apply
+            P->>A: Read that exact version
+            opt Replacing a shared value
+                P->>J: Record delete_pending
+                P->>O: DELETE secret
+                P->>J: Record deleted after acknowledgment
+            end
+            P->>J: Record pending
+            P->>O: POST create or personal upsert
+            P->>J: Record applied after acknowledgment
+        end
+    end
+```
+
+The script creates missing entries, skips unchanged AWS versions, and updates
+changed versions only for mappings already owned by its journal. Unknown existing
+names or edited ARN/field mappings are refused; use a new destination name or
+[operator recovery](./RECOVERY.md). Source deletion and removed mappings never
+cause destination deletion.
+
+## Prerequisites
+
+- Python 3.10+ on Linux or macOS; `boto3` and `requests` from `requirements.txt`.
+- AWS credentials through the [Boto3 credential chain](https://docs.aws.amazon.com/boto3/latest/guide/credentials.html).
+  Grant `DescribeSecret` and `GetSecretValue` on the mapped ARNs; see the
+  [IAM example](./iam-policy.example.json) and [AWS access documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access.html).
+  Customer-managed encryption keys may require `kms:Decrypt`.
+- An organization-bound OpenHands API key injected as `OH_API_KEY`. Shared-secret
+  writes require owner/admin permission. Keep credentials out of mappings and
+  command arguments. `GET /api/keys/current` returns organization and user IDs;
+  verify they match the intended account and organization before configuring them.
+
+## Run It
+
+From this directory, install dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
-cp mapping.example.json mapping.local.json
 ```
 
-Edit the mapping with your OpenHands HTTPS origin, organization UUID, exact AWS
-secret ARNs, and destination environment-variable names. Use `json_field` to select
-one top-level string field; omit it to copy the whole string. Binary values are
-unsupported. Only explicitly mapped secrets are read.
+Set the mapping's HTTPS origin, organization UUID, exact AWS ARN, and destination
+name (a valid environment-variable name). `json_field` selects one top-level string
+field; omit it for the whole string. Binary values are unsupported.
 
-Provide AWS credentials through the [Boto3 credential chain](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html).
-Grant `DescribeSecret` and `GetSecretValue` on the mapped ARNs; see the
-[IAM example](./iam-policy.example.json) and [AWS access documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access.html).
-Customer-managed encryption keys may also require `kms:Decrypt`.
-Inject an organization-bound OpenHands API key as `OH_API_KEY` through your job
-runner. Shared-secret writes require owner/admin permission. Keep credentials out
-of mapping files and command arguments.
+<!-- docs:tabs -->
 
-For personal secrets, copy [mapping.personal.example.json](./mapping.personal.example.json)
-instead. Supply the intended user's own org-bound key and `expected_user_id`.
-For several users, run one mapping and persistent journal per user; an administrator
-key does not impersonate them. The script verifies the key's organization and user
-binding before reading AWS values. `GET /api/keys/current` returns the IDs;
-verify they belong to the intended account and organization before configuring them.
+### Organization Secrets
 
-## Run And Schedule
-
-Preview without reading values, then create missing entries:
+Copy [mapping.example.json](./mapping.example.json) to `mapping.local.json` and
+edit it. Use the same journal for preview, initial import, and recurring sync.
 
 ```bash
-python sync_secrets.py --config mapping.local.json
-python sync_secrets.py --config mapping.local.json --apply
+python sync_secrets.py --config mapping.local.json --state .sync-state/org/journal.sqlite
 ```
 
-For recurring **personal** sync:
+```text
+mapping 1: would create (value not read)
+```
 
 ```bash
-python sync_secrets.py --config alice.local.json --state .sync-state/alice/journal.sqlite --sync --apply
+python sync_secrets.py --config mapping.local.json --state .sync-state/org/journal.sqlite --apply
 ```
 
-For recurring **organization** sync:
+```text
+mapping 1: create acknowledged
+```
+
+After the source version changes, run:
 
 ```bash
 python sync_secrets.py --config mapping.local.json --state .sync-state/org/journal.sqlite --sync --allow-delete-recreate --apply
 ```
 
-Omit `--apply` to preview either sync command. Your scheduler can run the apply
-command weekly using absolute paths and injected credentials. Keep the same
-journal on a persistent local volume, make its directory private (`chmod 700`),
-and run one exclusive writer per destination. Alert on any nonzero exit; successful
-mappings remain committed when another fails.
+```text
+mapping 1: delete/recreate acknowledged
+```
 
-The script creates missing entries, skips unchanged AWS `AWSCURRENT` versions,
-and updates changed versions only for mappings already recorded in its journal.
-Unknown existing destinations, including changed ARN/field mappings, are refused;
-choose an unused destination name or follow [operator recovery](./RECOVERY.md).
-Removing a mapping or deleting its
-AWS source does not delete the OpenHands secret.
+> [!WARNING]
+> This command deletes and re-creates shared values, including on newer servers.
+> If creation fails, the secret can remain missing for all members until recovery.
+> Read [Updates and Recovery](#updates-and-recovery) before scheduling it.
 
-## Updates And Recovery
+### Personal Secrets
 
-Personal values use upsert. The qualified organization API only edits metadata,
-so shared values require explicit delete/recreate permission. The script validates
-the new source value before deletion, but replacement has an availability gap.
-**New conversations receive updated values; running conversations can retain old
-values.** Use a separate process for credential revocation.
+Copy [mapping.personal.example.json](./mapping.personal.example.json) to
+`alice.local.json`. Supply the intended user's own org-bound key and
+`expected_user_id`; an administrator key does not impersonate them. Use a separate
+mapping and persistent journal for each user.
 
-Retain the journal and allow this script exclusive control of managed names: the
-API has no qualified conditional-write contract, and the journal lock cannot
-coordinate UI changes or other clients. Out-of-band value changes are not detected.
+```bash
+python sync_secrets.py --config alice.local.json --state .sync-state/alice/journal.sqlite
+```
+
+```text
+mapping 1: would create (value not read)
+```
+
+```bash
+python sync_secrets.py --config alice.local.json --state .sync-state/alice/journal.sqlite --apply
+```
+
+```text
+mapping 1: create acknowledged
+```
+
+After the source version changes, run:
+
+```bash
+python sync_secrets.py --config alice.local.json --state .sync-state/alice/journal.sqlite --sync --apply
+```
+
+```text
+mapping 1: personal upsert acknowledged
+```
+
+<!-- /docs:tabs -->
+
+Omit `--apply` to preview without reading values. Unchanged versions print:
+
+```text
+mapping 1: checkpoint unchanged (not value-verified)
+```
+
+Your scheduler can run the recurring command weekly with absolute paths, injected
+credentials, and the same persistent journal. Its directory must be private
+(`chmod 700`). Run one exclusive writer per destination and alert on any nonzero
+exit; successful mappings remain committed when another fails.
+
+## Secret Name Collisions
+
+On the tested API, personal and organization names are separate namespaces.
+Neither create endpoint rejects a name used in the other scope. The personal
+value keeps the bare name; the shared value receives a suffix (`_2`, `_3`, …)
+in that user's conversations and `GET /api/v1/secrets/search`. The stored shared
+name remains unchanged in the organization listing.
+
+> [!WARNING]
+> An organization sync cannot see members' personal secrets. A member with a
+> matching personal name keeps their own value under that name; rotating the shared
+> value only changes their suffixed variable, such as `NAME_2`.
+
+Personal preflight rejects mapped names that match unsuffixed shared names in the
+search results. A shared secret created later can appear already suffixed, so the
+next sync does **not** detect that collision. Use team/system prefixes and reserve
+managed names across scopes; this script cannot enforce that policy.
+
+## Updates and Recovery
+
+Personal values use upsert. This recipe rotates shared values with DELETE then
+POST, only with `--sync --allow-delete-recreate`. It validates the new AWS value
+before deleting anything. The existing organization metadata PUT cannot replace
+values; the newer value-replacement API is separate (see [Compatibility](#compatibility)).
+
+> [!WARNING]
+> After DELETE succeeds, the shared entry is absent until POST succeeds. New
+> conversations started in that window lack the shared value. A failed or
+> unacknowledged POST can leave it missing for all members until an operator
+> completes [recovery](./RECOVERY.md); it is not just a brief availability gap.
+> A timeout can also hide a successful write. The script blocks uncertain mappings
+> instead of guessing or automatically retrying them.
+
+New conversations receive updated values; running conversations can retain old
+values. Credential revocation is a separate process. Keep exclusive control of
+managed names: the operations used here have no conditional-write contract, and
+the local journal lock cannot coordinate other clients. Out-of-band destination
+value changes are not detected.
 
 | Journal Status | Action |
 | --- | --- |
 | `applied` | Normal sync can continue |
-| `deleted` | Acknowledged shared deletion with no create attempted; rerun with both shared-sync flags to restore an absent entry |
-| `pending` / `delete_pending` | Outcome uncertain; reconcile request/audit evidence before resuming |
+| `deleted` | Acknowledged shared deletion, no POST attempted; rerun the shared sync command to restore an absent entry |
+| `pending` / `delete_pending` | Uncertain outcome; follow operator recovery before resuming |
 
-Writes are sent once. Timeouts or interrupted writes can need operator review;
-a listed name cannot prove its value. Do not erase the journal to bypass a blocked
-operation; use the [operator recovery procedure](./RECOVERY.md). A `deleted` checkpoint with an unexpectedly present entry also blocks.
-Values and tokens are not intentionally logged or stored in the journal; disable
-HTTP/SDK wire logging in your runner.
+Do not erase the journal to bypass uncertainty. Values and tokens are not
+intentionally logged or stored in it; disable HTTP/SDK wire logging in your runner.
 
-## Adapt To Another Vault
+## Adapt to Another Vault
 
 In [sync_secrets.py](./sync_secrets.py), replace `current_version()` and
-`read_value()` with your vault's metadata/version and value API calls, then adjust
-the source client factory, ARN-to-region parsing inside `sync()`, mapping validation,
-and source error handling. Keep a
-stable source identifier and version token, and return the exact version requested
-so rotation detection and recovery remain meaningful. A version change between
-metadata and value reads must fail safely.
+`read_value()` with your vault's metadata/version and value API calls. Adjust the
+client factory, ARN-to-region parsing in `sync()`, mapping validation, and source
+error handling. Keep a stable source ID and version token; read the exact requested
+version and fail safely if it changes between metadata and value reads.
 
-The OpenHands adapters (`OpenHands` and `PersonalOpenHands`) and journal provide the
-destination side. No OpenHands product change is required to add a source. Other
-vaults are extension points, not included integrations; qualify their versioning,
-authentication, retries, and synthetic-secret delivery before use.
+Keep the OpenHands adapters and journal for the destination side. Other vaults
+are extension points, not included integrations; qualify their authentication,
+versioning, retries, and synthetic-secret delivery before use.
 
-## Compatibility And References
+## APIs Used
 
-Qualified with synthetic AWS values on Enterprise 1.68.0 candidate / runtime
-1.50.1, including personal/shared updates, interrupted shared recovery, and actual
-agent consumption. Qualify your deployment before importing real credentials;
-version numbers alone do not establish API compatibility.
+| Endpoint | Used For |
+| --- | --- |
+| AWS `DescribeSecret` / `GetSecretValue` | Locate and read the exact `AWSCURRENT` version |
+| `GET /api/keys/current` | Verify effective/bound organization and personal user |
+| `GET /api/organizations/{org_id}/secrets` | List shared names |
+| `POST /api/organizations/{org_id}/secrets` | Create shared values |
+| `DELETE /api/organizations/{org_id}/secrets/{name}` | Remove the old shared entry before re-creation |
+| `GET /api/v1/secrets/search` | List personal/shared names visible to the user |
+| `POST /api/v1/secrets` | Create or upsert the authenticated user's personal value |
+
+## Compatibility
+
+The [maintainer review](https://github.com/OpenHands/enterprise-cookbook/pull/29#pullrequestreview-5689160630)
+validated this script at `2e83432` on **Enterprise 1.74.0**, using simulated AWS
+(moto) and real OpenHands APIs and agent consumption of rotated values. Qualify
+your deployment before importing real credentials; this is not a minimum-version
+or blanket compatibility guarantee.
+
+**Enterprise 1.81.0 added atomic shared-value replacement** through separate
+`GET .../secrets/{name}/version` and `PUT .../secrets/{name}/value` endpoints.
+This recipe does **not** use or qualify them and still deletes/re-creates shared
+values on newer servers. Adopting that API requires a separately tested adapter
+and conditional-version/retry handling; the ordinary metadata PUT remains
+metadata-only. Inspect your deployment's `/openapi.json` before choosing a path.
+
+## Related
 
 <!-- docs:cards -->
 

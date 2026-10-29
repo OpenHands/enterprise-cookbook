@@ -586,3 +586,71 @@ def test_delete_transport_no_retry_or_response_body(setup):
     destination.session.delete.assert_called_once_with(
         destination.url + "/CANARY", timeout=(10, 30), allow_redirects=False
     )
+
+
+def test_personal_search_suffix_is_not_a_cross_scope_uniqueness_guarantee(setup):
+    config, source, _, journal = rotation_setup(setup, personal=True)
+    client = module.PersonalOpenHands(config, "FAKE")
+    client.metadata = Mock(
+        side_effect=[
+            {
+                "org_id": config["org_id"],
+                "bound_org_id": config["org_id"],
+                "user_id": config["expected_user_id"],
+            },
+            {
+                "items": [
+                    {"name": "CANARY", "scope": "personal"},
+                    {"name": "CANARY_2", "scope": "organization"},
+                ],
+                "next_page_id": None,
+            },
+        ]
+    )
+    client.session = Mock()
+    client.session.post.return_value.status_code = 201
+    # The platform can suffix a shared name added after the personal import.
+    # We see only its effective name, so cannot detect the stored-name collision.
+    assert module.sync(config, lambda _: source, client, journal, True, True) == 0
+    assert client.session.post.call_args.kwargs["json"] == {
+        "name": "CANARY",
+        "value": VALUE + "-2",
+        "scope": "personal",
+    }
+    client.session.delete.assert_not_called()
+
+
+@pytest.mark.parametrize("outcome", ["rejected", "timeout_absent", "timeout_committed"])
+def test_failed_post_after_shared_delete_blocks_without_retry(setup, outcome, capsys):
+    config, source, _, journal = rotation_setup(setup)
+    stored = {"CANARY": VALUE}
+    client = module.OpenHands(config, "FAKE")
+    client.names = Mock(side_effect=lambda: set(stored))
+    client.session = Mock()
+
+    def delete(*_args, **_kwargs):
+        stored.pop("CANARY")
+        return Mock(status_code=204)
+
+    def post(*_args, **kwargs):
+        if outcome == "rejected":
+            return Mock(status_code=403)
+        if outcome == "timeout_committed":
+            stored["CANARY"] = kwargs["json"]["value"]
+        raise requests.Timeout(VALUE)
+
+    client.session.delete.side_effect = delete
+    client.session.post.side_effect = post
+    assert module.sync(config, lambda _: source, client, journal, True, True, True) == 1
+    key = module.mapping_key(config, config["mappings"][0])
+    assert journal.get(key) == ("v2", "pending")
+    # A lost response may hide a commit. Both presence and absence must block.
+    assert ("CANARY" in stored) == (outcome == "timeout_committed")
+    if stored:
+        assert stored["CANARY"] == VALUE + "-2"
+    source.get_secret_value.reset_mock()
+    assert module.sync(config, lambda _: source, client, journal, True, True, True) == 1
+    source.get_secret_value.assert_not_called()
+    assert client.session.delete.call_count == 1
+    assert client.session.post.call_count == 1
+    assert VALUE not in str(capsys.readouterr())

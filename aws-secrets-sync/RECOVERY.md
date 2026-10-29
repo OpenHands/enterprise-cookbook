@@ -1,7 +1,7 @@
 # Operator Recovery
 
 Use this only after a mapping stops for reconciliation. Routine weekly runs use
-the commands in the [quickstart](./README.md#run-and-schedule).
+the commands in the [quickstart](./README.md#run-it).
 
 ## Resolve The Remote Outcome First
 
