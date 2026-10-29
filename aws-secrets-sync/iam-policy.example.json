@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadExplicitSourceSecrets",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:example/service-AbCdEf"
+      ]
+    }
+  ]
+}
