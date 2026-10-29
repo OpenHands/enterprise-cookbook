@@ -654,3 +654,24 @@ def test_failed_post_after_shared_delete_blocks_without_retry(setup, outcome, ca
     assert client.session.delete.call_count == 1
     assert client.session.post.call_count == 1
     assert VALUE not in str(capsys.readouterr())
+
+
+@pytest.mark.parametrize("directory_mode", [0o700, 0o750, 0o704])
+def test_journal_requires_private_directory_before_creating_state(
+    tmp_path, directory_mode
+):
+    directory = tmp_path / "state"
+    directory.mkdir(mode=0o700)
+    directory.chmod(directory_mode)
+    path = directory / "journal.sqlite"
+    if directory_mode != 0o700:
+        with pytest.raises(module.SyncError, match="State directory must be private"):
+            module.Journal(path)
+        assert not path.exists()
+        return
+    journal = module.Journal(path)
+    try:
+        assert directory.stat().st_mode & 0o777 == 0o700
+        assert path.stat().st_mode & 0o777 == 0o600
+    finally:
+        journal.close()

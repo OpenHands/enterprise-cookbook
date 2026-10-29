@@ -3,7 +3,7 @@
 Use this only after a mapping stops for reconciliation. Routine weekly runs use
 the commands in the [quickstart](./README.md#run-it).
 
-## Resolve The Remote Outcome First
+## Resolve the Remote Outcome First
 
 1. Stop the scheduled job and all other writers for the selected destination.
 2. Identify the exact origin, user/scope, organization, mapping number, and journal
@@ -22,7 +22,7 @@ the commands in the [quickstart](./README.md#run-it).
 A 401/403 may explain a rejected request, but it does not automatically clear the
 checkpoint. Correct the key/role and complete these checks before resetting it.
 
-## Reset Only The Reconciled Checkpoint
+## Reset Only the Reconciled Checkpoint
 
 After all requests are settled and the destination is verified absent, use the
 standard SQLite CLI against the **same** journal. Replace both the path and the

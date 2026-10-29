@@ -149,9 +149,10 @@ exit; successful mappings remain committed when another fails.
 
 ## Secret Name Collisions
 
-On the tested API, personal and organization names are separate namespaces.
-Neither create endpoint rejects a name used in the other scope. The personal
-value keeps the bare name; the shared value receives a suffix (`_2`, `_3`, …)
+On the tested API, personal secrets belong to a user within the effective
+organization. Personal and shared names are separate namespaces; neither create
+endpoint rejects a name used in the other scope. The personal value keeps the bare
+name; the shared value receives a suffix (`_2`, `_3`, …)
 in that user's conversations and `GET /api/v1/secrets/search`. The stored shared
 name remains unchanged in the organization listing.
 
@@ -160,10 +161,10 @@ name remains unchanged in the organization listing.
 > matching personal name keeps their own value under that name; rotating the shared
 > value only changes their suffixed variable, such as `NAME_2`.
 
-Personal preflight rejects mapped names that match unsuffixed shared names in the
+Personal preflight rejects mapped names that match shared names as listed in the
 search results. A shared secret created later can appear already suffixed, so the
-next sync does **not** detect that collision. Use team/system prefixes and reserve
-managed names across scopes; this script cannot enforce that policy.
+next sync does **not** detect that base-name collision. Use team/system prefixes
+and reserve managed names across scopes; this script cannot enforce that policy.
 
 ## Updates and Recovery
 
@@ -192,8 +193,10 @@ value changes are not detected.
 | `deleted` | Acknowledged shared deletion, no POST attempted; rerun the shared sync command to restore an absent entry |
 | `pending` / `delete_pending` | Uncertain outcome; follow operator recovery before resuming |
 
-Do not erase the journal to bypass uncertainty. Values and tokens are not
-intentionally logged or stored in it; disable HTTP/SDK wire logging in your runner.
+A `deleted` checkpoint also blocks if the entry is unexpectedly present; reconcile
+it before proceeding. Do not erase the journal to bypass uncertainty. Values and
+tokens are not intentionally logged or stored in it; disable HTTP/SDK wire logging
+in your runner.
 
 ## Adapt to Another Vault
 
