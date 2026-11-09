@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "wanderlust": {
+      "url": "${MCP_SERVER_URL}/mcp",
+      "transport": "sse",
+      "headers": {
+        "Authorization": "Bearer ${MCP_AUTH_TOKEN}",
+        "X-Customer-ID": "${WANDERLUST_CUSTOMER_ID}",
+        "X-Project-ID": "${WANDERLUST_PROJECT_ID}"
+      }
+    }
+  }
+}
