@@ -1,3 +1,4 @@
+---
 title: macOS Agent Canvas Backend
 description: Install a remote macOS Agent Server from OpenHands Enterprise using SSH and scoped secrets.
 category: Secrets & authentication
