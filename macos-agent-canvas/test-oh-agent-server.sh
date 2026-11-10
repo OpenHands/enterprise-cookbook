@@ -198,6 +198,8 @@ awk '/^  Session API key:/{if (prev != "" || prev2 != "") exit 1; found=1} {prev
 grep -Fq "Copy without displaying:   $0 key --copy" "$TMP/install-output"
 grep -Fq "Display in terminal:       $0 key" "$TMP/install-output"
 grep -Fq "Rotate without displaying: $0 key --reset" "$TMP/install-output"
+grep -Fq 'Custom key: Set OHAS_SESSION_API_KEY for install or key --reset.' "$TMP/install-output"
+grep -Fq 'Requires 32+ chars: A-Z a-z 0-9 . _ ~ + / = -' "$TMP/install-output"
 [ "$(plutil -extract UserName raw -o - "$PLIST")" = agenttest ]
 [ "$(plutil -extract EnvironmentVariables.HOME raw -o - "$PLIST")" = "$OHAS_TARGET_HOME" ]
 [ "$(plutil -extract WorkingDirectory raw -o - "$PLIST")" = "$OHAS_HOME/data" ]

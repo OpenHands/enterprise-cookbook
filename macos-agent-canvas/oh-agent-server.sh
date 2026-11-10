@@ -433,6 +433,8 @@ cmd_install() {
   echo "    Copy without displaying:   $0 key --copy"
   echo "    Display in terminal:       $0 key"
   echo "    Rotate without displaying: $0 key --reset"
+  echo "    Custom key: Set OHAS_SESSION_API_KEY for install or key --reset."
+  echo "                Requires 32+ chars: A-Z a-z 0-9 . _ ~ + / = -"
   warn_if_firewall_blocks
   echo >&2
   echo >&2
