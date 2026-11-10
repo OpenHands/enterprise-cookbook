@@ -1,0 +1,7 @@
+{
+  "name": "macos-agent-canvas",
+  "version": "0.1.0",
+  "description": "Install and manage a remote macOS Agent Server from OpenHands Enterprise.",
+  "license": "MIT",
+  "keywords": ["macos", "agent-server", "ssh", "remote-backend"]
+}
