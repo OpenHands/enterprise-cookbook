@@ -54,24 +54,37 @@ installation. The skills are bundled in this recipe's [plugin](./.claude-plugin/
 
 ## Run It
 
-Set `MAC_SSH` to the remote SSH login. Clone the cookbook **on the Mac** and install from that
-checkout. Until this recipe is merged, use the `macOS-agent-canvas` branch; change the branch to
-`main` after publication. Never run an uninspected `curl | sh` installer.
+From the Enterprise terminal, SSH into the Mac **once** as the non-root administrator who will
+run the service. Verify the Mac's SSH host key before accepting it. Keep this login open while
+installing:
 
 ```bash
 export MAC_SSH=admin@mac.example.net
-ssh "$MAC_SSH" 'uname -s; id -un; command -v git; command -v uv'
-ssh "$MAC_SSH" 'git clone --branch macOS-agent-canvas https://github.com/OpenHands/enterprise-cookbook.git "$HOME/enterprise-cookbook"'
-ssh -t "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && ./oh-agent-server.sh install --host 127.0.0.1'
-ssh "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && ./oh-agent-server.sh status'
+ssh "$MAC_SSH"
 ```
 
-`install` may prompt for the remote administrator's sudo password. It prints the listening URL,
-launchd service details and health result, **not** the session key. For a Mac that already has
-this checkout, run `git -C "$HOME/enterprise-cookbook" fetch` and check the desired branch before
-reinstalling; reinstalling the same user/path preserves its data and keys unless overridden. The
-first install generates a temporary session key; the next step replaces it with the Enterprise-held
-key. Do not expose the service to a network before that rotation.
+In that **Mac shell**, run this one compound command to clone the recipe and install the server.
+Until this recipe is merged, use the `macOS-agent-canvas` branch; change it to `main` after
+publication. The `&&` operators stop the command if cloning or changing directories fails.
+This runs the installer immediately after cloning: review the source beforehand, or split the
+clone and install if you need to inspect the downloaded files. Do not pipe a script to a shell.
+
+```bash
+git clone --branch macOS-agent-canvas https://github.com/OpenHands/enterprise-cookbook.git "$HOME/enterprise-cookbook" &&
+  cd "$HOME/enterprise-cookbook/macos-agent-canvas" &&
+  ./oh-agent-server.sh install --host 127.0.0.1
+```
+
+`install` may prompt for the Mac administrator's sudo password. It prints the listening URL,
+launchd service details and health result, **not** the session key; no separate SSH `status`
+command is needed for installation. If the checkout already exists, inspect its changes and
+branch, update it with `git fetch`/`git checkout`, then run `./oh-agent-server.sh install` from
+`macos-agent-canvas` in the same Mac shell. Reinstalling the same user/path preserves its data and
+keys unless overridden. The first install generates a temporary session key; the later key handoff
+replaces it with the Enterprise-held key. Do not expose the service to a network before that
+replacement. Run `exit` when ready to return to the Enterprise terminal for the secret steps.
+Those later key-handoff steps still open separate SSH connections so the secret never shares a
+terminal with a sudo password prompt; SSH key authentication can avoid repeated SSH login prompts.
 
 A healthy status includes:
 
