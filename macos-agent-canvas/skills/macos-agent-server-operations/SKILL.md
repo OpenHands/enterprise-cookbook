@@ -1,23 +1,45 @@
 ---
 name: macos-agent-server-operations
-description: This skill should be used when the user asks to "check the remote Mac agent server", "view Mac Agent Server logs", "restart the macOS backend", or "delegate a macOS task to the remote agent server" from an OpenHands Enterprise conversation. Covers safe day-to-day operations and delegation prerequisites.
+description: This skill should be used when the user asks to "check the remote Mac agent server", "view Mac Agent Server logs", "restart the macOS backend", or "delegate a macOS task to the remote agent server" from an OpenHands Enterprise conversation. Distinguishes operator-only SSH management from authenticated REST access by Enterprise sandboxes.
 ---
 
-# Operate a Remote macOS Agent Server
+# Operate a macOS Agent Server from Enterprise
 
-Read [the recipe](../../README.md) before using a remote Mac. Treat the Mac as a distinct host runtime with direct access to that user's files and processes, not as an isolated Enterprise sandbox. Confirm the target host and obtain permission before changing service state or running a new agent conversation.
+Read [the recipe](../../README.md) before using the remote Mac. The Mac runs a separate host
+runtime with access to its service user's files and processes, not an isolated Enterprise
+sandbox. Its API is plain HTTP in this draft; use it only on the agreed restricted customer
+network. Do not treat a firewall as transport encryption.
 
-## Service Management
+## Service Management Is Operator-Only
 
-- Run `./oh-agent-server.sh status` over the established SSH connection from the existing Mac checkout; report the service, PID, and readiness without reading or printing its key. Use `logs` only after considering whether logs may contain sensitive output; never paste unredacted credentials into chat.
-- Use `start`, `stop`, or `restart` only on request. `stop` disables boot startup until `start`; `restart` preserves the key. Avoid `remove --purge` and `key` without `--reset` for routine operations.
-- Treat `/health` and `/ready` as unauthenticated process checks, **not** proof that the session key or LLM profile works. Confirm authentication through a key-protected API over a private path once that path is configured.
+- An operator with existing Mac SSH access runs `./oh-agent-server.sh status`, `logs`, `start`,
+  `stop`, or `restart` from the installed checkout. The Enterprise agent has **no Mac SSH key or
+  sudo permission**. Ask the operator to run these commands if needed; do not request their
+  password, SSH key, or a printed session key in chat.
+- The operator's `stop` disables boot startup until `start`; `restart` preserves the key.
+  `remove --purge` destroys the installation and conversations. Logs may include sensitive
+  output and must not be pasted unredacted into chat.
+- `/health` and `/ready` are unauthenticated process checks, not proof that the session key,
+  sandbox network path, or LLM profile works. Use the recipe's authenticated, read-only REST
+  check from the **Enterprise sandbox** for the first two.
 
 ## Before Delegating Work
 
-1. Identify the Mac's private endpoint. A service bound to `127.0.0.1` needs a tunnel in the **Enterprise conversation's network namespace**; Enterprise's `localhost` does not reach the Mac directly. A VPN endpoint must be reachable from that namespace. Do not expose port `18100` publicly or skip SSH host-key verification.
-2. Refer to the Enterprise secret by its unique name (for example, `MAC_AGENT_SERVER_KEY`) so the secret is injected into the terminal environment. Never query the vault for the value, print the variable, add it to a URL, or place it in a command argument. Confirm the secret's personal or organization scope and any Agent Profile secret selection.
-3. Check that the Mac has an active, responding LLM profile. The server's session key is **not** the Enterprise LiteLLM BYOR key. If no profile exists, stop and finish the LLM provisioning installment first; do not create an LLM key or profile just to make a health check pass.
-4. Before starting a remote Agent Server conversation, confirm the Mac workspace path, service user, tool permissions, expected outputs, and data sensitivity with the user. Send an explicit workspace and task-specific prompt; do not default to unrestricted changes on the host. Authenticate API calls with `X-Session-API-Key` over the private route and observe the resulting conversation before reporting success.
+1. Confirm a private HTTP address and TCP port reachable **from the calling Enterprise sandbox**
+   and firewall rules allowing only the intended sandbox network. A service bound to
+   `127.0.0.1` is not remotely reachable; `localhost` in Enterprise is not the Mac. Do not use
+   a public address or assume operator SSH implies sandbox reachability.
+2. Refer to the Enterprise secret by its unique name (`MAC_AGENT_SERVER_KEY`). Its value is
+   injected into the sandbox terminal environment when the command references the name; never
+   query the registry for the value, print the variable, put it in a URL, or include it in a
+   literal command argument. Confirm personal/organization scope and Agent Profile selection.
+3. Check that the Mac has an active, responding LLM profile. The session key is not an LLM
+   provider key. If none exists, stop until the LLM provisioning installment is complete.
+4. Before starting a Mac Agent Server conversation, confirm the workspace path, service user,
+   tool permissions, expected outputs, and data sensitivity with the user. Authenticate REST
+   calls using `X-Session-API-Key` and observe the result. Do not default to unrestricted host
+   changes or assume `/ready` means a conversation will run successfully.
 
-This first version of the skill supports service checks and lays out guardrails. The recipe's later delegation installment will supply a validated conversation-start request and event-monitoring commands after testing the Mac and LLM profile end to end.
+The later delegation installment will supply a validated conversation-start request and REST
+monitoring commands after testing the Mac and LLM profile end to end. Plain HTTP must be
+replaced with TLS or an encrypted private tunnel before sensitive or production use.

@@ -1,7 +1,7 @@
 {
   "name": "macos-agent-canvas",
   "version": "0.1.0",
-  "description": "Install and manage a remote macOS Agent Server from OpenHands Enterprise.",
+  "description": "Operator-install a Mac Agent Server for REST access from Enterprise sandboxes.",
   "license": "MIT",
-  "keywords": ["macos", "agent-server", "ssh", "remote-backend"]
+  "keywords": ["macos", "agent-server", "enterprise", "rest"]
 }
