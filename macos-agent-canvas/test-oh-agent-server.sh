@@ -16,6 +16,7 @@ export OHAS_TARGET_HOME="$TMP/target-home"
 export OHAS_TEST_LOADED="$TMP/loaded"
 export OHAS_TEST_BOOTOUT="$TMP/bootout-pending"
 export OHAS_TEST_CALLS="$TMP/launchctl-calls"
+export OHAS_TEST_AUDIT="$TMP/sudo-audit"
 export TMP_USER_COMMANDS="$TMP/user-commands"
 mkdir -p "$TMP/bin" "$OHAS_HOME" "$OHAS_TARGET_HOME/.local/bin"
 chmod 700 "$OHAS_HOME"
@@ -47,7 +48,14 @@ if [ "$1" = -H ]; then
   exit $?
 fi
 case "$*" in
-  -v) exit 0 ;;
+  -v) echo validate >>"$OHAS_TEST_AUDIT"; exit 0 ;;
+  '-n -l /bin/launchctl print system/dev.openhands.agent-server'|'-n -l /bin/launchctl kickstart -k system/dev.openhands.agent-server')
+    [ "${OHAS_DENY_UNATTENDED:-0}" != 1 ] ;;
+  '-n /bin/launchctl print system/dev.openhands.agent-server')
+    [ "${OHAS_DENY_UNATTENDED:-0}" != 1 ] && { test -f "${OHAS_HOME:-}/loaded" || test -f "$OHAS_TEST_LOADED"; } ;;
+  '-n /bin/launchctl kickstart -k system/dev.openhands.agent-server')
+    [ "${OHAS_DENY_UNATTENDED:-0}" != 1 ] || exit 1
+    echo unattended-restart >>"$OHAS_TEST_AUDIT" ;;
   'launchctl print system/dev.openhands.agent-server') test -f "${OHAS_HOME:-}/loaded" || test -f "$OHAS_TEST_LOADED" ;;
   'launchctl bootout system/dev.openhands.agent-server')
     [ "${OHAS_TEST_DENY_BOOTOUT:-0}" != 1 ] || exit 1
@@ -115,6 +123,22 @@ write_config 127.0.0.1 18100 old-key encryption-key
 [ "$(cmd_key --copy)" = '==> Session API key copied to clipboard' ]
 [ "$(cat "$OHAS_CLIPBOARD")" = old-key ]
 if (cmd_key --unknown >/dev/null 2>&1); then exit 1; fi
+if (cmd_key --defer-restart >/dev/null 2>&1); then exit 1; fi
+if (cmd_key --unattended >/dev/null 2>&1); then exit 1; fi
+if (cmd_key --reset --defer-restart --unattended >/dev/null 2>&1); then exit 1; fi
+if (SERVICE_USER=agenttest cmd_key --reset --defer-restart >/dev/null 2>&1); then exit 1; fi
+if (SERVICE_USER=agenttest cmd_key --reset --unattended >/dev/null 2>&1); then exit 1; fi
+
+export OHAS_DENY_SUDO=1 OHAS_SESSION_API_KEY='deferred-reset_key.1234567890abcdefghij'
+touch "$OHAS_HOME/loaded"
+output="$(cmd_key --reset --defer-restart)"
+load_config
+[ "$OH_SESSION_API_KEYS_0" = "$OHAS_SESSION_API_KEY" ]
+[ "$output" = '==> Session API key saved; restart the service to apply it' ]
+[ ! -e "$OHAS_HOME/restarts" ] && [ ! -e "$OHAS_TEST_AUDIT" ]
+unset OHAS_DENY_SUDO OHAS_SESSION_API_KEY
+rm -f "$OHAS_HOME/loaded"
+write_config 127.0.0.1 18100 old-key encryption-key
 
 output="$(cmd_key --reset)"
 load_config
@@ -151,7 +175,7 @@ unset OHAS_SESSION_API_KEY
 
 output="$(cmd_start)"
 [[ "$output" == *'Agent Server: http://127.0.0.1:18100'* ]]
-[[ "$output" == *'/v1/'* && "$output" == *'/sockets/'* && "$output" == *'key [--copy] [--reset]'* ]]
+[[ "$output" == *'/v1/'* && "$output" == *'/sockets/'* && "$output" == *'key [--copy] [--reset [--defer-restart|--unattended]]'* ]]
 output="$(cmd_restart)"
 [[ "$output" == *'/openapi.json'* && "$output" == *'/ready'* ]]
 [ "$(wc -l <"$OHAS_HOME/restarts" | tr -d ' ')" -eq 2 ]
@@ -164,6 +188,22 @@ load_config
 [[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]]
 [ "$(cat "$OHAS_CLIPBOARD")" = "$before" ]
 [ "$(wc -l <"$OHAS_HOME/restarts" | tr -d ' ')" -eq 3 ]
+
+before="$OH_SESSION_API_KEYS_0"
+export OHAS_SESSION_API_KEY='unattended-reset_key.1234567890abcdefghij'
+export OHAS_DENY_UNATTENDED=1
+if (cmd_key --reset --unattended >/dev/null 2>&1); then exit 1; fi
+load_config
+[ "$OH_SESSION_API_KEYS_0" = "$before" ]
+unset OHAS_DENY_UNATTENDED
+validations_before="$(grep -c '^validate$' "$OHAS_TEST_AUDIT")"
+output="$(cmd_key --reset --unattended)"
+load_config
+[ "$OH_SESSION_API_KEYS_0" = "$OHAS_SESSION_API_KEY" ]
+[ "$output" = '==> Session API key rotated; existing clients must use the new key' ]
+[ "$(grep -c '^validate$' "$OHAS_TEST_AUDIT")" -eq "$validations_before" ]
+[ "$(tail -n 1 "$OHAS_TEST_AUDIT")" = unattended-restart ]
+unset OHAS_SESSION_API_KEY
 
 before="$OH_SESSION_API_KEYS_0"
 for invalid in '' short "invalid'key-012345678901234567890123456789" $'bad\nkey-012345678901234567890123456789' "$before"; do

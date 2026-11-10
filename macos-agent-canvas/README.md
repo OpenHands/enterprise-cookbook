@@ -37,9 +37,9 @@ installation. The skills are bundled in this recipe's [plugin](./.claude-plugin/
   recipe; do not disable SSH host-key verification.
 - On the Mac: macOS, `git`, `curl`, `openssl`, `uv` available to the service account, and an admin
   account that can authorize `sudo`. The installer creates a Python 3.12 virtual environment.
-- For unattended **remote key rotation**, `ssh -T "$MAC_SSH" 'sudo -n -v'` must succeed. If it does
-  not, stop before sending the key; arrange an operator-assisted rotation rather than piping a
-  sudo password and a secret into one session. Installation itself uses an interactive `sudo` prompt.
+- For first-time setup, an operator can enter the sudo password in a separate SSH session when
+  restarting the service. Passwordless sudo is optional, only for later unattended rotation.
+  Log in as the installed service user to change the key without privileged file access.
 - An Enterprise organization selected for the conversation and a human user's Enterprise app API
   credential available as `OH_API_KEY` in that conversation's terminal (store it as a secret; do
   not paste it into chat). To save a *personal* secret, use your own API key; to save an
@@ -150,25 +150,66 @@ secret selection). In the current Enterprise terminal, keep the generated variab
 rotation succeeds. See [Enterprise Secrets Management](https://docs.openhands.dev/enterprise/secrets-management)
 for permissions and the difference between personal and shared scopes.
 
-## Rotate the Mac Key
+## Replace the Mac Session Key
 
-First verify **non-interactive** sudo and the target checkout, without sending a secret. The
-installer's `key --reset` needs sudo to restart launchd and refuses a replacement identical to the
-current key.
+The installer creates a temporary session API key. Replace it with the Enterprise-held key on
+first setup; use the same procedure for later rotation. The new key must differ from the current
+one. **Use the operator-assisted path by default**. Both paths send the key over SSH stdin, never
+in a shell argument or a pseudo-terminal. `ssh -T` prevents terminal echo. The remote shell reads
+one line as `OHAS_SESSION_API_KEY`; the installer removes it from child-process environments and
+writes it to permission-restricted `config.env`.
+
+### Operator-Assisted Setup
+
+Use the SSH login of the **installed service user**. Verify the checkout before sending a secret.
+`--defer-restart` stores the key without calling sudo. Then open a **separate** interactive SSH
+session to restart the daemon; the operator enters the sudo password there, with no key on stdin.
+The old key remains active until the restart succeeds. Do not expose the Mac's port in between.
 
 ```bash
-ssh -T "$MAC_SSH" 'sudo -n -v && test -x "$HOME/enterprise-cookbook/macos-agent-canvas/oh-agent-server.sh"'
+ssh -T "$MAC_SSH" 'test -x "$HOME/enterprise-cookbook/macos-agent-canvas/oh-agent-server.sh"'
+if printf '%s\n' "$MAC_AGENT_SERVER_KEY" |
+  ssh -T "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && IFS= read -r OHAS_SESSION_API_KEY && export OHAS_SESSION_API_KEY && ./oh-agent-server.sh key --reset --defer-restart'; then
+  unset MAC_AGENT_SERVER_KEY
+  ssh -t "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && ./oh-agent-server.sh restart && ./oh-agent-server.sh status'
+else
+  printf 'Key replacement failed; check the Mac and stored secret before retrying.\n' >&2
+fi
 ```
 
-Only after that succeeds, send the key over SSH **stdin**, not in a shell argument, command line,
-file, or URL. `ssh -T` disables a pseudo-terminal so the secret cannot be echoed by terminal line
-discipline. The remote shell reads one line, passes it as `OHAS_SESSION_API_KEY` to the installer,
-and the installer removes it from child-process environments. The script stores it in its
-permission-restricted `config.env` and restarts the server if running.
+If the restart fails after saving the key, **retry only the restart**, not `key --reset`: the
+stored key and Enterprise secret already agree, but the running service may still have the old
+key. When the service is stopped, restart it with `start` rather than `restart`.
+
+### Unattended Rotation (Optional)
+
+Only if you need later automated rotation, have the Mac administrator confirm that
+`/private/etc/sudoers` includes `/private/etc/sudoers.d`, then use
+`sudo visudo -f /private/etc/sudoers.d/openhands-agent-server` to install a root-owned sudoers
+file (mode `0440`) for the **exact** two launchctl operations below. Replace `MAC_SERVICE_USER`
+with the actual SSH/service account; do not use wildcards or `NOPASSWD: ALL`:
+
+```text
+MAC_SERVICE_USER ALL=(root) NOPASSWD: /bin/launchctl print system/dev.openhands.agent-server, /bin/launchctl kickstart -k system/dev.openhands.agent-server
+```
+
+The administrator must verify the sudoers file's ownership, mode, and syntax with `visudo`; this
+gives the selected user permission to inspect and restart **this** daemon, not arbitrary root
+commands. It still expands what that account can do: opt in only if automation justifies it.
+After a fresh login, verify the two exact rules without sending a secret or relying on cached sudo
+authorization:
+
+```bash
+ssh -t "$MAC_SSH" 'sudo -k; sudo -n -l /bin/launchctl print system/dev.openhands.agent-server && sudo -n -l /bin/launchctl kickstart -k system/dev.openhands.agent-server'
+```
+
+If that check fails, use the operator-assisted path; do not weaken sudo policy. The installer
+checks the same permissions before writing the key. `--unattended` does **not** call `sudo -v` and
+uses `sudo -n` for its launchctl commands, so it cannot wait for a password on the secret stream.
 
 ```bash
 if printf '%s\n' "$MAC_AGENT_SERVER_KEY" |
-  ssh -T "$MAC_SSH" 'sudo -n -v && cd "$HOME/enterprise-cookbook/macos-agent-canvas" && IFS= read -r OHAS_SESSION_API_KEY && export OHAS_SESSION_API_KEY && ./oh-agent-server.sh key --reset'; then
+  ssh -T "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && IFS= read -r OHAS_SESSION_API_KEY && export OHAS_SESSION_API_KEY && ./oh-agent-server.sh key --reset --unattended'; then
   unset MAC_AGENT_SERVER_KEY
   ssh "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && ./oh-agent-server.sh status'
 else
@@ -176,16 +217,16 @@ else
 fi
 ```
 
-If rotation fails, **do not unset the new key until the Mac and Enterprise secret agree**. In a
-new conversation, refer to the secret name `MAC_AGENT_SERVER_KEY` to have Enterprise inject its
-value; do not retrieve it through a display/`echo` command. A reset invalidates the previous key
-for all clients. Do not call `key --reset` twice with different generated keys unless you also
-update the stored secret. When service is stopped, reset updates the key but leaves it stopped.
+If either path fails **before saving the key**, keep the generated Enterprise-side variable until
+the vault and Mac agree. In a new conversation, refer to the stored secret by the name
+`MAC_AGENT_SERVER_KEY`; never print or retrieve its value. A successful restart invalidates the
+previous key for all clients. Do not generate another key without updating the stored secret. If
+`--unattended` updates the key but the restart fails, fix the restart rather than resetting again.
 
 > [!IMPORTANT]
-> The recipe has not yet been exercised against a real Mac. In particular, interactive sudo for
-> `install`, non-interactive sudo for `key --reset`, SSH routing from the Enterprise sandbox, and
-> macOS firewall behavior must be checked with the test Mac before publishing this article.
+> This recipe has not yet been exercised against a real Mac. Operator-assisted restart, limited
+> sudo policy, SSH routing from the Enterprise sandbox, and macOS firewall behavior must be
+> checked with the test Mac before publishing this article.
 
 ## Manage the Service
 

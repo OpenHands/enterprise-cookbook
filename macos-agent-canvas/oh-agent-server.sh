@@ -63,10 +63,12 @@ Commands:
   restart         Restart the service.
   status          Show install state, launchd state, PID and /health result.
   logs [-f]       Show the last log lines (-f to follow).
-  key [--copy] [--reset]
+  key [--copy] [--reset [--defer-restart|--unattended]]
                   Display the X-Session-API-Key, or copy it to the clipboard.
-                  --reset rotates the key without displaying it and restarts
+                  --reset replaces the key without displaying it and restarts
                   the service (sudo required); combine with --copy to copy it.
+                  --defer-restart saves the key without sudo; restart separately.
+                  --unattended restarts with sudo -n and requires narrow sudo rights.
 
 Environment:
   OHAS_HOME             Install directory (default: ~/.openhands-agent-server)
@@ -202,7 +204,7 @@ EOF
   Commands:
     $0 status | start | stop | restart
     $0 logs [-f]
-    $0 key [--copy] [--reset]
+    $0 key [--copy] [--reset [--defer-restart|--unattended]]
     $0 install [--port N] [--host H] [--ref GIT_REF] [--user USER]
     $0 remove [--purge] [--yes]
 EOF
@@ -573,15 +575,22 @@ cmd_logs() {
 }
 
 cmd_key() {
-  local copy=0 reset=0 was_loaded=0 session_key
+  local copy=0 reset=0 defer_restart=0 unattended=0 was_loaded=0 session_key
   while [ $# -gt 0 ]; do
     case "$1" in
       --copy) copy=1 ;;
       --reset) reset=1 ;;
+      --defer-restart) defer_restart=1 ;;
+      --unattended) unattended=1 ;;
       *) die "unknown option for key: $1" ;;
     esac
     shift
   done
+  [ "$defer_restart" -eq 0 ] || { [ "$reset" -eq 1 ] && [ "$unattended" -eq 0 ]; } || die "--defer-restart requires --reset and excludes --unattended"
+  [ "$unattended" -eq 0 ] || [ "$reset" -eq 1 ] || die "--unattended requires --reset"
+  if [ "$defer_restart" -eq 1 ] || [ "$unattended" -eq 1 ]; then
+    [ "$SERVICE_USER" = "$(id -un)" ] || die "this key mode requires an SSH login as the installed service user"
+  fi
   as_service_user test -f "$CONFIG" || die "not installed; run: $0 install"
   [ "$copy" -eq 0 ] || command -v pbcopy >/dev/null 2>&1 || die "pbcopy not found"
   load_config
@@ -591,13 +600,25 @@ cmd_key() {
       [ "$OHAS_SESSION_API_KEY" != "$OH_SESSION_API_KEYS_0" ] || die "new session API key must differ from the current key"
     fi
     require_installed
-    sudo -v || die "sudo authorization required to restart the service"
-    loaded && was_loaded=1
+    if [ "$unattended" -eq 1 ]; then
+      sudo -n -l /bin/launchctl print "system/$LABEL" >/dev/null || die "non-interactive sudo is not authorized to inspect this service"
+      sudo -n -l /bin/launchctl kickstart -k "system/$LABEL" >/dev/null || die "non-interactive sudo is not authorized to restart this service"
+      sudo -n /bin/launchctl print "system/$LABEL" >/dev/null 2>&1 && was_loaded=1
+    elif [ "$defer_restart" -eq 0 ]; then
+      sudo -v || die "sudo authorization required to restart the service"
+      loaded && was_loaded=1
+    fi
     session_key="${OHAS_SESSION_API_KEY:-$(openssl rand -hex 32)}"
     write_config "$OHAS_HOST" "$OHAS_PORT" "$session_key" "$OH_SECRET_KEY"
     load_config
-    if [ "$was_loaded" -eq 1 ]; then
-      sudo launchctl kickstart -k "system/$LABEL" || die "key updated but restart failed; run: $0 restart"
+    if [ "$defer_restart" -eq 1 ]; then
+      info "Session API key saved; restart the service to apply it"
+    elif [ "$was_loaded" -eq 1 ]; then
+      if [ "$unattended" -eq 1 ]; then
+        sudo -n /bin/launchctl kickstart -k "system/$LABEL" || die "key updated but restart failed; run: $0 restart"
+      else
+        sudo launchctl kickstart -k "system/$LABEL" || die "key updated but restart failed; run: $0 restart"
+      fi
       wait_healthy || die "key updated but service is not ready; check: $0 logs"
       info "Session API key rotated; existing clients must use the new key"
     else
