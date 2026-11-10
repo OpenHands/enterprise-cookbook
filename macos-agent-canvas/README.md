@@ -37,9 +37,10 @@ installation. The skills are bundled in this recipe's [plugin](./.claude-plugin/
   recipe; do not disable SSH host-key verification.
 - On the Mac: macOS, `git`, `curl`, `openssl`, `uv` available to the service account, and an admin
   account that can authorize `sudo`. The installer creates a Python 3.12 virtual environment.
-- For first-time setup, an operator can enter the sudo password in a separate SSH session when
-  restarting the service. Passwordless sudo is optional, only for later unattended rotation.
-  Log in as the installed service user to change the key without privileged file access.
+- For first-time setup, keep the original Mac SSH shell open for an operator to authorize the
+  service restart. Use a second Enterprise terminal for the secret handoff, never the sudo prompt.
+  Passwordless sudo is optional, only for later unattended rotation. Log in as the installed
+  service user to change the key without privileged file access.
 - An Enterprise organization selected for the conversation and a human user's Enterprise app API
   credential available as `OH_API_KEY` in that conversation's terminal (store it as a secret; do
   not paste it into chat). To save a *personal* secret, use your own API key; to save an
@@ -82,9 +83,10 @@ branch, update it with `git fetch`/`git checkout`, then run `./oh-agent-server.s
 `macos-agent-canvas` in the same Mac shell. Reinstalling the same user/path preserves its data and
 keys unless overridden. The first install generates a temporary session key; the later key handoff
 replaces it with the Enterprise-held key. Do not expose the service to a network before that
-replacement. Run `exit` when ready to return to the Enterprise terminal for the secret steps.
-Those later key-handoff steps still open separate SSH connections so the secret never shares a
-terminal with a sudo password prompt; SSH key authentication can avoid repeated SSH login prompts.
+replacement. **Keep this Mac shell open**: use a second terminal in the same Enterprise
+conversation for the next steps. After it sends the key, restart from this original Mac shell so
+there is no third SSH login. The key-transfer connection still requires SSH authentication; SSH
+key authentication can avoid a repeated login password prompt.
 
 A healthy status includes:
 
@@ -115,9 +117,10 @@ for service checks now and task delegation once the later parts are tested.
 
 ## Save the Session Key in Enterprise
 
-Generate one random 64-character hex key in the **Enterprise conversation**; the installer accepts
-32 or more characters from `A-Z a-z 0-9 . _ ~ + / = -`. Choose one scope and a unique name. The
-examples use `MAC_AGENT_SERVER_KEY`; avoid creating personal and shared secrets with the same name.
+In the **second Enterprise terminal** (not the Mac shell), generate one random 64-character hex
+key; the installer accepts 32 or more characters from `A-Z a-z 0-9 . _ ~ + / = -`. Choose one scope
+and a unique name. The examples use `MAC_AGENT_SERVER_KEY`; avoid creating personal and shared
+secrets with the same name.
 If a Mac already has a stored key, reuse it rather than generating a new one unless you intend to
 rotate. Do not print the generated value.
 
@@ -174,25 +177,38 @@ writes it to permission-restricted `config.env`.
 
 ### Operator-Assisted Setup
 
-Use the SSH login of the **installed service user**. Verify the checkout before sending a secret.
-`--defer-restart` stores the key without calling sudo. Then open a **separate** interactive SSH
-session to restart the daemon; the operator enters the sudo password there, with no key on stdin.
-The old key remains active until the restart succeeds. Do not expose the Mac's port in between.
+In the **second Enterprise terminal**, use the SSH login of the installed service user (the
+same account as in the first Mac shell). Set `MAC_SSH` here too: shell variables from the first
+terminal are not shared. The SSH command verifies the checkout before reading the key from stdin.
+`--defer-restart` stores it without calling sudo. No pseudo-terminal or sudo password prompt
+shares the key-transfer connection.
 
 ```bash
-ssh -T "$MAC_SSH" 'test -x "$HOME/enterprise-cookbook/macos-agent-canvas/oh-agent-server.sh"'
+export MAC_SSH=admin@mac.example.net
 if printf '%s\n' "$MAC_AGENT_SERVER_KEY" |
-  ssh -T "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && IFS= read -r OHAS_SESSION_API_KEY && export OHAS_SESSION_API_KEY && ./oh-agent-server.sh key --reset --defer-restart'; then
+  ssh -T "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && test -x ./oh-agent-server.sh && IFS= read -r OHAS_SESSION_API_KEY && export OHAS_SESSION_API_KEY && ./oh-agent-server.sh key --reset --defer-restart'; then
   unset MAC_AGENT_SERVER_KEY
-  ssh -t "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && ./oh-agent-server.sh restart && ./oh-agent-server.sh status'
+  printf 'Key saved. Return to the first Mac shell to restart the service.\n'
 else
   printf 'Key replacement failed; check the Mac and stored secret before retrying.\n' >&2
 fi
 ```
 
+**Only after the key is saved**, return to the **original Mac shell** from installation. Restart
+there; the operator enters their sudo password in this shell, which never received the key:
+
+```bash
+cd "$HOME/enterprise-cookbook/macos-agent-canvas" &&
+  ./oh-agent-server.sh restart &&
+  ./oh-agent-server.sh status
+```
+
+The old key remains active until the restart succeeds. Do not expose the Mac's port in between.
 If the restart fails after saving the key, **retry only the restart**, not `key --reset`: the
 stored key and Enterprise secret already agree, but the running service may still have the old
-key. When the service is stopped, restart it with `start` rather than `restart`.
+key. When the service is stopped, use `start` rather than `restart`. After confirming the service,
+run `exit` in the Mac shell. For later rotations without an open Mac shell, open one interactive
+SSH login for the restart or choose the optional unattended path below.
 
 ### Unattended Rotation (Optional)
 
