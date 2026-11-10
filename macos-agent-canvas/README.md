@@ -48,12 +48,12 @@ management. Both are bundled in this recipe's [plugin](./.claude-plugin/plugin.j
   account; for a dedicated non-admin service account, provision its home and `uv` first and
   pass `--user ACCOUNT` to the installer. That account's files and processes will be available
   to anyone with the session key. The operator still runs the installer and authorizes sudo.
-- Choose a **stable private IP address assigned to the Mac** and a hostname resolvable from
-  Enterprise sandboxes. The customer's firewall must allow TCP port `18100` **only from the
-  intended Enterprise sandbox network**. Verify that sandbox egress and the Mac's application
-  firewall permit the connection. SSH is needed only between the operator workstation and Mac;
-  successful operator SSH does not establish sandbox-to-Mac reachability. Do not expose the API
-  on the public internet.
+- Choose a hostname for the Mac that resolves from Enterprise sandboxes. On first install,
+  Agent Server listens on **all Mac interfaces** (`0.0.0.0`); the customer's firewall must
+  allow TCP port `18100` **only from the intended Enterprise sandbox network**. Verify that
+  sandbox egress and the Mac's application firewall permit the connection. SSH is needed only
+  between the operator workstation and Mac; successful operator SSH does not establish
+  sandbox-to-Mac reachability. Do not expose the API on the public internet.
 - The operator has Enterprise browser access to the intended organization and
   `Settings > Secrets`. A member can save a personal secret; an Admin/Owner is required for an
   organization-shared secret. A new conversation must have the secret in its scope and, if
@@ -69,17 +69,16 @@ export MAC_SSH=admin@mac.example.net
 ssh "$MAC_SSH"
 ```
 
-In that **Mac shell**, replace `10.0.0.25` with the Mac's actual stable private interface
-address. Until this recipe is merged, use the `macOS-agent-canvas` branch; change it to `main`
-after publication. Review the source beforehand, or separate the clone and install to inspect
-the downloaded files. The `&&` operators stop the install if an earlier command fails. Do not
-pipe a downloaded script to a shell.
+In that **Mac shell**, clone the recipe and install the server. Until this recipe is merged,
+use the `macOS-agent-canvas` branch; change it to `main` after publication. Review the source
+beforehand, or separate the clone and install to inspect the downloaded files. The `&&`
+operators stop the install if an earlier command fails. Do not pipe a downloaded script to a
+shell.
 
 ```bash
-export MAC_PRIVATE_IP=10.0.0.25
 git clone --branch macOS-agent-canvas https://github.com/OpenHands/enterprise-cookbook.git "$HOME/enterprise-cookbook" &&
   cd "$HOME/enterprise-cookbook/macos-agent-canvas" &&
-  ./oh-agent-server.sh install --host "$MAC_PRIVATE_IP"
+  ./oh-agent-server.sh install
 ```
 
 For a dedicated existing service account, add `--user ACCOUNT` to the install command; verify
@@ -88,13 +87,16 @@ for the Mac administrator's sudo password when registering or starting the launc
 installs a session key and an independent encryption key but **does not print either key**.
 If this checkout already exists, inspect its branch and changes, update it with `git fetch` /
 `git checkout`, and install from `macos-agent-canvas`. Reinstalling with the same user/path
-preserves keys and data unless explicitly overridden.
+preserves its prior bind address, keys, and data unless explicitly overridden. Check the
+installer's listening address before continuing; `127.0.0.1` would not be reachable from
+Enterprise sandboxes.
 
 The installer checks readiness automatically. To check the unauthenticated endpoint yourself
-from the same Mac shell (substitute the actual address/port if changed), run:
+from the same Mac shell, run this for a first install (use the configured host/port if reusing
+an installation bound to a different address):
 
 ```bash
-curl -fsS --max-time 3 "http://$MAC_PRIVATE_IP:18100/ready"
+curl -fsS --max-time 3 http://127.0.0.1:18100/ready
 ```
 
 A successful `/ready` response confirms the process, **not** API authentication, network

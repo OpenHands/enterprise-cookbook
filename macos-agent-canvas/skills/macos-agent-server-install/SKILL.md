@@ -17,10 +17,12 @@ sandbox; no Enterprise SSH access is needed.
    a service account. A dedicated non-admin account needs a home and `uv` accessible before
    `--user ACCOUNT` is used. The Mac's agent-server runs tools as that account without
    container isolation.
-2. Confirm the Mac has a stable private address, the intended Enterprise sandboxes can route to
-   it, and the customer firewall restricts TCP `18100` to those sandboxes. Bind to the Mac's
-   private interface, not `127.0.0.1` or a public endpoint. SSH reachability from the
-   operator's workstation is not proof of REST reachability from Enterprise.
+2. Confirm the Mac's hostname resolves from the intended Enterprise sandboxes and the customer
+   firewall restricts TCP `18100` to those sandboxes. On first install, the server binds to
+   **all Mac interfaces** (`0.0.0.0`) unless explicitly configured otherwise; this makes the
+   firewall restriction essential. An existing install may retain a different bind address.
+   SSH reachability from the operator's workstation is not proof of REST reachability from
+   Enterprise.
 3. Explain the draft's **plain-HTTP risk** before proceeding: the session key, requests, and
    responses are unencrypted in transit. A restricted customer network does not provide TLS.
    Do not call this production-safe or use it for sensitive workloads.
