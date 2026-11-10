@@ -1,0 +1,49 @@
+# Example configuration for secret migration
+# This file shows example usage patterns (documentation in progress)
+
+examples:
+  - name: "Migrate from sandbox environment"
+    description: "Run from inside a conversation where secrets are already available"
+    command: |
+      ./oh-secret-migrator.py \
+        --source-url $OPENHANDS_API_URL \
+        --source-key $OPENHANDS_API_KEY \
+        --dest-url https://production.example.com \
+        --dest-key $PROD_API_KEY \
+        --from-env
+    notes:
+      - "Recommended approach - no manual entry needed"
+      - "Works on both Cloud and Enterprise"
+      - "Secrets automatically read from environment variables"
+
+  - name: "Dry run preview"
+    description: "Preview which secrets would be migrated without actually migrating"
+    command: |
+      ./oh-secret-migrator.py \
+        --source-url https://source.example.com \
+        --source-key $SOURCE_KEY \
+        --dest-url https://dest.example.com \
+        --dry-run
+    notes:
+      - "Safe to test - makes no changes"
+      - "Shows which secrets would be migrated"
+      - "Good for planning migration"
+
+  - name: "Include organization secrets"
+    description: "Migrate both personal and organization secrets"
+    command: |
+      ./oh-secret-migrator.py \
+        --source-url https://source.example.com \
+        --source-key $SOURCE_KEY \
+        --dest-url https://dest.example.com \
+        --dest-key $DEST_KEY \
+        --include-org \
+        --from-env
+    notes:
+      - "Requires admin/owner permissions for org secrets"
+      - "Migrates both scopes in one run"
+
+notes:
+  - "Tool supports multiple secret retrieval methods"
+  - "Documentation and best practices still being finalized"
+  - "See README.md for current status"
