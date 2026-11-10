@@ -1,31 +1,56 @@
 # macOS Agent Canvas local backend
 
-Work in progress, GitHub-only (no `example.yaml`), and not yet tested on macOS.
+Work in progress, GitHub-only (no `example.yaml`).
 
 `oh-agent-server.sh` installs the OpenHands agent-server from
 [OpenHands/software-agent-sdk](https://github.com/OpenHands/software-agent-sdk) as a launchd
-LaunchDaemon on macOS. The service runs as your user, listens on port `18100` on all interfaces, and
-starts at boot. Use it as a local (host process) backend for Agent Canvas.
+LaunchDaemon on macOS. The service runs as the installing user by default (or the account given
+with `--user`), listens on port `18100` on all interfaces, and starts at boot. Use it as a local
+(host process) backend for Agent Canvas.
 
 ```bash
-./oh-agent-server.sh install [--port N] [--host H] [--ref GIT_REF]
+./oh-agent-server.sh install [--port N] [--host H] [--ref GIT_REF] [--user USER]
 ./oh-agent-server.sh start | stop | restart | status
 ./oh-agent-server.sh logs [-f]
-./oh-agent-server.sh key     # session API key for the X-Session-API-Key header
+./oh-agent-server.sh key                  # display the X-Session-API-Key
+./oh-agent-server.sh key --copy           # copy without printing it
+./oh-agent-server.sh key --reset          # rotate, restart, and display the new key
+./oh-agent-server.sh key --reset --copy   # rotate, restart, and copy instead
 ./oh-agent-server.sh remove [--purge] [--yes]
 ```
 
-Run it as your normal user. It calls `sudo` only for `/Library/LaunchDaemons` and `launchctl`.
+Run it as your normal administrator account, not root. It calls `sudo` for launchd and, with
+`--user`, to create files and install packages as the selected account. That account must already
+exist, have a writable home directory, and be able to run `uv` (either installed for that account
+or through Homebrew). To choose the storage directory as well:
+
+```bash
+OHAS_HOME=/path/writable/by/service-account ./oh-agent-server.sh install --user service-account
+./oh-agent-server.sh status
+```
+
+Without `OHAS_HOME`, the default is `~service-account/.openhands-agent-server`. Subsequent commands
+read the user and storage path from the installed launchd plist. Changing `--user` without also
+selecting a writable directory creates a new installation under that user's home; existing keys,
+conversations, and files are **not** migrated. Reinstalling for the same user and path preserves them.
+
+Install displays the session key and prints server routes and commands, then ends with a security
+warning; `start` and `restart` print the same summary. A key reset invalidates the old key for
+clients; if the service is stopped, it stays stopped and uses the new key on the next `start`.
 
 ## Notes
 
-- Install directory: `~/.openhands-agent-server` (venv, `config.env` with the keys, logs, data).
-  Needs `uv`.
+- Install directory: the selected user's `~/.openhands-agent-server` by default, or `OHAS_HOME`
+  (venv, `config.env` with the keys, logs, data).
 - `install` defaults to the latest PyPI release. `--ref` installs a branch, tag, or commit from
   GitHub. Re-running `install` upgrades and keeps the keys, port, and host.
 - `stop` also disables the service at boot until you run `start`.
-- The service runs agents with your user's permissions and no container boundary. `/api/*` needs the
-  session key. `/docs`, `/server_info`, `/health`, `/ready`, and `/alive` do not.
+- `remove` unregisters the service and deletes its launchd plist; `--purge` also deletes the install
+  directory. If stopping the service or removing the plist fails, the install directory is kept.
+- Anyone who can reach the server and has the `X-Session-API-Key` can execute arbitrary shell commands
+  as the selected user; keep the key secret and restrict network access. There is no container boundary.
+  `/api/*`, `/v1/*`, and `/sockets/*` need the session key. `/docs`, `/redoc`, `/openapi.json`,
+  `/server_info`, `/health`, `/ready`, and `/alive` do not.
 - Because it binds `0.0.0.0`, `install` and `status` warn when the macOS application firewall is on.
 - Add it to Agent Canvas under Manage Backends with `http://<host>:18100` and the session key.
   Conversations run on the host unless `OH_CONVERSATION_RUNTIME=docker` is set or Settings -> Runtime
