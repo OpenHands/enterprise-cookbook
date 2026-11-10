@@ -12,6 +12,9 @@
 
 set -uo pipefail
 
+# Remove the supplied key from the environment before invoking any child process.
+if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then export -n OHAS_SESSION_API_KEY; fi
+
 LABEL="dev.openhands.agent-server"
 PLIST="/Library/LaunchDaemons/${LABEL}.plist"
 
@@ -47,7 +50,8 @@ Commands:
                   Install agent-server into $ROOT and register the service.
                   --user runs it as USER (default: existing service user,
                   or your account on a first install).
-                  Re-running upgrades the packages and keeps your keys.
+                  Re-running upgrades the packages and keeps your keys unless
+                  OHAS_SESSION_API_KEY supplies a replacement session key.
                   Default: latest release from PyPI. --ref installs that
                   branch/tag/commit of $GIT_URL instead.
   remove [--purge] [--yes]
@@ -61,10 +65,13 @@ Commands:
   logs [-f]       Show the last log lines (-f to follow).
   key [--copy] [--reset]
                   Display the X-Session-API-Key, or copy it to the clipboard.
-                  --reset rotates the key and restarts the service (sudo required).
+                  --reset rotates the key without displaying it and restarts
+                  the service (sudo required); combine with --copy to copy it.
 
 Environment:
-  OHAS_HOME       Install directory (default: ~/.openhands-agent-server)
+  OHAS_HOME             Install directory (default: ~/.openhands-agent-server)
+  OHAS_SESSION_API_KEY  Optional key for install or key --reset (>=32 characters;
+                        letters, digits, . _ ~ + / = -). Not used by plain key.
 EOF
 }
 
@@ -138,6 +145,34 @@ health_url() {
   echo "http://$host:$OHAS_PORT/ready"
 }
 
+show_network_urls() {
+  local urls
+  urls="$(ifconfig -a 2>/dev/null | awk -v port="$OHAS_PORT" '
+    function emit(    i) {
+      if (active && name !~ /^(lo[0-9]*|awdl[0-9]*|llw[0-9]*)$/) {
+        for (i = 1; i <= count; i++) {
+          printf "    %s: http://%s:%s\n", name, address[i], port
+        }
+      }
+    }
+    /^[^[:space:]]+: flags=/ {
+      emit(); name = $1; sub(/:$/, "", name); count = 0
+      active = ($0 ~ /<UP,[^>]*RUNNING/)
+      next
+    }
+    $1 == "inet" && $2 !~ /^(127\.|169\.254\.)/ && $2 != "0.0.0.0" {
+      address[++count] = $2
+    }
+    $1 == "status:" { active = ($2 == "active") }
+    END { emit() }
+  ')"
+  if [ -n "$urls" ]; then
+    echo
+    echo "  Local network URLs (firewall and routing permitting):"
+    printf '%s\n' "$urls"
+  fi
+}
+
 show_server_summary() {
   local host="$OHAS_HOST"
   [ "$host" = "0.0.0.0" ] && host=localhost
@@ -147,6 +182,10 @@ show_server_summary() {
   Listening on: $OHAS_HOST:$OHAS_PORT
   Runs as: $SERVICE_USER (home: $SERVICE_HOME)
   Stores files in: $ROOT
+  Starts at boot
+EOF
+  [ "$OHAS_HOST" != "0.0.0.0" ] || show_network_urls
+  cat <<EOF
 
   Routes:
     /api/*          Agent server API (X-Session-API-Key required)
@@ -214,6 +253,14 @@ OH_SESSION_API_KEYS_0='$session_key'
 OH_SECRET_KEY='$secret_key'
 OHAS_PATH='$SERVICE_PATH'
 EOF
+}
+
+validate_session_key_override() {
+  [ "${#OHAS_SESSION_API_KEY}" -ge 32 ] || die "OHAS_SESSION_API_KEY must be at least 32 characters"
+  case "$OHAS_SESSION_API_KEY" in
+    *[!a-zA-Z0-9._~+/=-]*) die "OHAS_SESSION_API_KEY may only contain letters, digits, . _ ~ + / = -" ;;
+  esac
+  export -n OHAS_SESSION_API_KEY
 }
 
 warn_if_firewall_blocks() {
@@ -295,6 +342,7 @@ cmd_install() {
       *) die "unknown option for install: $1" ;;
     esac
   done
+  if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then validate_session_key_override; fi
 
   if [ -f "$PLIST" ]; then
     existing_user="$(plutil -extract UserName raw -o - "$PLIST" 2>/dev/null)" || die "cannot read service user from $PLIST"
@@ -324,6 +372,7 @@ cmd_install() {
   host="${host:-$DEFAULT_HOST}"
   port="${port:-$DEFAULT_PORT}"
   case "$port" in ''|*[!0-9]*) die "invalid port: $port" ;; esac
+  if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then session_key="$OHAS_SESSION_API_KEY"; fi
   [ -n "$session_key" ] || session_key="$(openssl rand -hex 32)"
   [ -n "$secret_key" ]  || secret_key="$(openssl rand -hex 32)"
 
@@ -378,10 +427,15 @@ cmd_install() {
     echo "warning: service did not become healthy within 60s; check: $0 logs" >&2
   fi
   show_server_summary
-  echo "  Session API key (X-Session-API-Key): $session_key"
-  echo "  To copy: $0 key --copy; to rotate: $0 key --reset [--copy]"
-  echo "  Starts at boot"
+  echo
+  echo
+  echo "  Session API key:"
+  echo "    Copy without displaying:   $0 key --copy"
+  echo "    Display in terminal:       $0 key"
+  echo "    Rotate without displaying: $0 key --reset"
   warn_if_firewall_blocks
+  echo >&2
+  echo >&2
   printf 'WARNING: Anyone who can reach this server and has the X-Session-API-Key can execute arbitrary shell commands as %s.\n' "$SERVICE_USER" >&2
   echo '         Keep the key secret; use --host 127.0.0.1 for local-only access.' >&2
 }
@@ -481,6 +535,7 @@ cmd_status() {
   echo "runs as: $SERVICE_USER (home: $SERVICE_HOME)"
   echo "install dir: $ROOT"
   echo "listen: $OHAS_HOST:$OHAS_PORT"
+  [ "$OHAS_HOST" != "0.0.0.0" ] || show_network_urls
   warn_if_firewall_blocks
   if sudo launchctl print-disabled system 2>/dev/null | grep -q "\"$LABEL\" => disabled"; then
     echo "boot start: disabled (stopped by user)"
@@ -516,7 +571,7 @@ cmd_logs() {
 }
 
 cmd_key() {
-  local copy=0 reset=0 was_loaded=0
+  local copy=0 reset=0 was_loaded=0 session_key
   while [ $# -gt 0 ]; do
     case "$1" in
       --copy) copy=1 ;;
@@ -529,10 +584,15 @@ cmd_key() {
   [ "$copy" -eq 0 ] || command -v pbcopy >/dev/null 2>&1 || die "pbcopy not found"
   load_config
   if [ "$reset" -eq 1 ]; then
+    if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then
+      validate_session_key_override
+      [ "$OHAS_SESSION_API_KEY" != "$OH_SESSION_API_KEYS_0" ] || die "new session API key must differ from the current key"
+    fi
     require_installed
     sudo -v || die "sudo authorization required to restart the service"
     loaded && was_loaded=1
-    write_config "$OHAS_HOST" "$OHAS_PORT" "$(openssl rand -hex 32)" "$OH_SECRET_KEY"
+    session_key="${OHAS_SESSION_API_KEY:-$(openssl rand -hex 32)}"
+    write_config "$OHAS_HOST" "$OHAS_PORT" "$session_key" "$OH_SECRET_KEY"
     load_config
     if [ "$was_loaded" -eq 1 ]; then
       sudo launchctl kickstart -k "system/$LABEL" || die "key updated but restart failed; run: $0 restart"
@@ -545,7 +605,7 @@ cmd_key() {
   if [ "$copy" -eq 1 ]; then
     printf '%s' "$OH_SESSION_API_KEYS_0" | pbcopy || die "could not copy session API key"
     info "Session API key copied to clipboard"
-  else
+  elif [ "$reset" -eq 0 ]; then
     echo "$OH_SESSION_API_KEYS_0"
   fi
 }

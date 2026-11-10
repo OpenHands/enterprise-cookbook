@@ -4,6 +4,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+assert_not_in_file() {
+  if grep -Fq "$1" "$2"; then
+    echo "unexpected text in $2" >&2
+    exit 1
+  fi
+}
 export OHAS_HOME="$TMP/server"
 export OHAS_CLIPBOARD="$TMP/clipboard"
 export OHAS_TARGET_HOME="$TMP/target-home"
@@ -12,6 +18,7 @@ export OHAS_TEST_BOOTOUT="$TMP/bootout-pending"
 export OHAS_TEST_CALLS="$TMP/launchctl-calls"
 export TMP_USER_COMMANDS="$TMP/user-commands"
 mkdir -p "$TMP/bin" "$OHAS_HOME" "$OHAS_TARGET_HOME/.local/bin"
+chmod 700 "$OHAS_HOME"
 cat >"$TMP/bin/id" <<'EOF'
 #!/bin/bash
 case "$*" in
@@ -30,6 +37,7 @@ esac
 EOF
 cat >"$TMP/bin/sudo" <<'EOF'
 #!/bin/bash
+if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then echo 'supplied key leaked to sudo' >&2; exit 1; fi
 if [ "${OHAS_DENY_SUDO:-0}" = 1 ]; then exit 1; fi
 if [ "$1" = -H ]; then
   shift 2
@@ -70,7 +78,27 @@ cat >"$TMP/bin/pbcopy" <<'EOF'
 #!/bin/bash
 cat >"$OHAS_CLIPBOARD"
 EOF
-chmod +x "$TMP/bin/id" "$TMP/bin/sudo" "$TMP/bin/pbcopy" "$OHAS_TARGET_HOME/.local/bin/uv"
+cat >"$TMP/bin/ifconfig" <<'EOF'
+#!/bin/bash
+cat <<'INTERFACES'
+lo0: flags=8049<UP,LOOPBACK,RUNNING,MULTICAST> mtu 16384
+    inet 127.0.0.1 netmask 0xff000000
+en0: flags=8863<UP,BROADCAST,RUNNING,MULTICAST> mtu 1500
+    inet 192.0.2.10 netmask 0xffffff00
+    inet6 2001:db8::10 prefixlen 64
+    inet6 fdb1:83a1:b887:5826:894:f40e:cb4a:dd2d prefixlen 64
+    status: active
+en1: flags=8863<UP,BROADCAST,RUNNING,MULTICAST> mtu 1500
+    inet 198.51.100.4 netmask 0xffffff00
+    status: inactive
+awdl0: flags=8863<UP,BROADCAST,RUNNING,MULTICAST> mtu 1500
+    inet6 fe80::1234%awdl0 prefixlen 64
+    status: active
+utun3: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> mtu 1500
+    inet 10.8.0.1 netmask 0xffffffff
+INTERFACES
+EOF
+chmod +x "$TMP/bin/id" "$TMP/bin/sudo" "$TMP/bin/pbcopy" "$TMP/bin/ifconfig" "$OHAS_TARGET_HOME/.local/bin/uv"
 export PATH="$TMP/bin:$PATH"
 
 # Source the actual functions without dispatching a CLI command. This lets the
@@ -81,6 +109,8 @@ touch "$PLIST"
 wait_healthy() { return 0; }
 write_config 127.0.0.1 18100 old-key encryption-key
 
+[ "$(stat -f '%Sp' "$OHAS_HOME")" = drwx------ ]
+[ "$(stat -f '%Sp' "$CONFIG")" = -rw------- ]
 [ "$(cmd_key)" = old-key ]
 [ "$(cmd_key --copy)" = '==> Session API key copied to clipboard' ]
 [ "$(cat "$OHAS_CLIPBOARD")" = old-key ]
@@ -90,19 +120,34 @@ output="$(cmd_key --reset)"
 load_config
 [ "$OH_SESSION_API_KEYS_0" != old-key ]
 [ "${#OH_SESSION_API_KEYS_0}" -eq 64 ]
+[ "$(stat -f '%Sp' "$CONFIG")" = -rw------- ]
 [ "$OH_SECRET_KEY" = encryption-key ]
 [ "$OHAS_HOST:$OHAS_PORT" = 127.0.0.1:18100 ]
-[ "${output##*$'\n'}" = "$OH_SESSION_API_KEYS_0" ]
+[ "$output" = "==> Session API key rotated; service is stopped. Run: $0 start" ]
+[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]]
+[ "$(cmd_key)" = "$OH_SESSION_API_KEYS_0" ]
 [ ! -f "$OHAS_HOME/restarts" ]
+
+export OHAS_SESSION_API_KEY='provided-reset_key.1234567890abcdefghij'
+output="$(cmd_key --reset)"
+load_config
+[ "$OH_SESSION_API_KEYS_0" = "$OHAS_SESSION_API_KEY" ]
+[[ "$output" != *"$OHAS_SESSION_API_KEY"* ]]
+[ "$(stat -f '%Sp' "$CONFIG")" = -rw------- ]
+unset OHAS_SESSION_API_KEY
 
 before="$OH_SESSION_API_KEYS_0"
 touch "$OHAS_HOME/loaded"
+export OHAS_SESSION_API_KEY='provided-copy_key.4567890abcdefghijklm'
 output="$(cmd_key --copy --reset)"
 load_config
+[ "$OH_SESSION_API_KEYS_0" = "$OHAS_SESSION_API_KEY" ]
+unset OHAS_SESSION_API_KEY
 [ "$OH_SESSION_API_KEYS_0" != "$before" ]
 [ "$(cat "$OHAS_CLIPBOARD")" = "$OH_SESSION_API_KEYS_0" ]
 [ "$(cat "$OHAS_HOME/restarts")" = restart ]
 [ "${output##*$'\n'}" = '==> Session API key copied to clipboard' ]
+[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]]
 
 output="$(cmd_start)"
 [[ "$output" == *'Agent Server: http://127.0.0.1:18100'* ]]
@@ -112,6 +157,21 @@ output="$(cmd_restart)"
 [ "$(wc -l <"$OHAS_HOME/restarts" | tr -d ' ')" -eq 2 ]
 
 before="$OH_SESSION_API_KEYS_0"
+output="$(cmd_key --reset)"
+load_config
+[ "$OH_SESSION_API_KEYS_0" != "$before" ]
+[ "$output" = '==> Session API key rotated; existing clients must use the new key' ]
+[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]]
+[ "$(cat "$OHAS_CLIPBOARD")" = "$before" ]
+[ "$(wc -l <"$OHAS_HOME/restarts" | tr -d ' ')" -eq 3 ]
+
+before="$OH_SESSION_API_KEYS_0"
+for invalid in '' short "invalid'key-012345678901234567890123456789" $'bad\nkey-012345678901234567890123456789' "$before"; do
+  if (OHAS_SESSION_API_KEY="$invalid" cmd_key --reset >/dev/null 2>&1); then exit 1; fi
+done
+load_config
+[ "$OH_SESSION_API_KEYS_0" = "$before" ]
+[ "$(wc -l <"$OHAS_HOME/restarts" | tr -d ' ')" -eq 3 ]
 export OHAS_DENY_SUDO=1
 if (cmd_key --reset >/dev/null 2>&1); then exit 1; fi
 load_config
@@ -123,11 +183,21 @@ if (select_service_user missing-account >/dev/null 2>&1); then exit 1; fi
 if (select_service_user '--bad' >/dev/null 2>&1); then exit 1; fi
 export OHAS_HOME="$TMP/managed"
 set_root "$OHAS_HOME"
+if (OHAS_SESSION_API_KEY=short cmd_install --user agenttest >/dev/null 2>&1); then exit 1; fi
+if (OHAS_SESSION_API_KEY="invalid'key-012345678901234567890123456789" cmd_install --user agenttest >/dev/null 2>&1); then exit 1; fi
+[ ! -f "$CONFIG" ]
+export OHAS_SESSION_API_KEY='provided-install_key.1234567890abcdefghij'
 cmd_install --user agenttest --host 127.0.0.1 >"$TMP/install-output" 2>&1
 grep -Fq 'WARNING: Anyone who can reach this server and has the X-Session-API-Key can execute arbitrary shell commands as agenttest.' "$TMP/install-output"
 grep -Fq 'Keep the key secret' "$TMP/install-output"
 [ "$(tail -n 2 "$TMP/install-output" | head -n 1)" = 'WARNING: Anyone who can reach this server and has the X-Session-API-Key can execute arbitrary shell commands as agenttest.' ]
 [ "$(tail -n 1 "$TMP/install-output")" = '         Keep the key secret; use --host 127.0.0.1 for local-only access.' ]
+[ "$(tail -n 4 "$TMP/install-output" | head -n 2 | wc -l | tr -d ' ')" -eq 2 ]
+[ -z "$(tail -n 4 "$TMP/install-output" | head -n 2 | tr -d '[:space:]')" ]
+awk '/^  Session API key:/{if (prev != "" || prev2 != "") exit 1; found=1} {prev2=prev; prev=$0} END {if (!found) exit 1}' "$TMP/install-output"
+grep -Fq "Copy without displaying:   $0 key --copy" "$TMP/install-output"
+grep -Fq "Display in terminal:       $0 key" "$TMP/install-output"
+grep -Fq "Rotate without displaying: $0 key --reset" "$TMP/install-output"
 [ "$(plutil -extract UserName raw -o - "$PLIST")" = agenttest ]
 [ "$(plutil -extract EnvironmentVariables.HOME raw -o - "$PLIST")" = "$OHAS_TARGET_HOME" ]
 [ "$(plutil -extract WorkingDirectory raw -o - "$PLIST")" = "$OHAS_HOME/data" ]
@@ -137,7 +207,10 @@ grep -Fq 'Keep the key secret' "$TMP/install-output"
 [ "$(grep -c '^agenttest$' "$TMP_USER_COMMANDS")" -gt 0 ]
 load_config
 before="$OH_SESSION_API_KEYS_0"
-[ -n "$before" ]
+[ "$before" = "$OHAS_SESSION_API_KEY" ]
+unset OHAS_SESSION_API_KEY
+assert_not_in_file "$before" "$TMP/install-output"
+assert_not_in_file 'Local network URLs' "$TMP/install-output"
 
 unset OHAS_HOME
 select_installed_service
@@ -153,6 +226,30 @@ grep -Fq 'WARNING: Anyone who can reach this server and has the X-Session-API-Ke
 load_config
 [ "$OH_SESSION_API_KEYS_0" = "$before" ]
 [[ "$(cat "$TMP/reinstall-output")" == *'Runs as: agenttest'* ]]
+assert_not_in_file "$before" "$TMP/reinstall-output"
+
+export OHAS_SESSION_API_KEY='provided-upgrade_key.1234567890abcdefghij'
+cmd_install --host 127.0.0.1 >"$TMP/override-output" 2>&1
+load_config
+[ "$OH_SESSION_API_KEYS_0" = "$OHAS_SESSION_API_KEY" ]
+[ "$OH_SESSION_API_KEYS_0" != "$before" ]
+assert_not_in_file "$OHAS_SESSION_API_KEY" "$TMP/override-output"
+unset OHAS_SESSION_API_KEY
+before="$OH_SESSION_API_KEYS_0"
+
+cmd_install --host 0.0.0.0 >"$TMP/network-output" 2>&1
+grep -Fq 'Local network URLs (firewall and routing permitting):' "$TMP/network-output"
+grep -Fq 'en0: http://192.0.2.10:18100' "$TMP/network-output"
+if grep -Eq '2001:db8|fdb1:83a1|http://\[' "$TMP/network-output"; then
+  echo 'IPv6 URL advertised by IPv4-only server' >&2
+  exit 1
+fi
+grep -Fq 'utun3: http://10.8.0.1:18100' "$TMP/network-output"
+if grep -Eq 'en1:|lo0:|awdl0:' "$TMP/network-output"; then
+  echo 'inactive or local-only interface advertised' >&2
+  exit 1
+fi
+assert_not_in_file "$before" "$TMP/network-output"
 
 cmd_install --user agenttest --host 127.0.0.1 >"$TMP/same-user-output"
 [ "$ROOT" = "$TMP/managed" ]

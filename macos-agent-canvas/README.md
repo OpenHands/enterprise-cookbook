@@ -14,10 +14,27 @@ with `--user`), listens on port `18100` on all interfaces, and starts at boot. U
 ./oh-agent-server.sh logs [-f]
 ./oh-agent-server.sh key                  # display the X-Session-API-Key
 ./oh-agent-server.sh key --copy           # copy without printing it
-./oh-agent-server.sh key --reset          # rotate, restart, and display the new key
-./oh-agent-server.sh key --reset --copy   # rotate, restart, and copy instead
+./oh-agent-server.sh key --reset          # rotate and restart without displaying
+./oh-agent-server.sh key --reset --copy   # rotate, restart, and copy without displaying
 ./oh-agent-server.sh remove [--purge] [--yes]
 ```
+
+To use your own session key on first install, set `OHAS_SESSION_API_KEY`. Set it to a **different**
+value with `key --reset` to rotate, or on `install` to replace a key during an upgrade. Without it,
+install generates a key and upgrades retain it; `key --reset` generates a fresh one. For example,
+to enter a key without putting its value in shell history:
+
+```bash
+read -rsp 'New session API key: ' OHAS_SESSION_API_KEY; echo
+export OHAS_SESSION_API_KEY
+./oh-agent-server.sh install   # or: ./oh-agent-server.sh key --reset
+unset OHAS_SESSION_API_KEY
+```
+
+Supplied keys must be at least 32 characters and contain only letters, digits, `. _ ~ + / = -`.
+An explicitly empty or unsafe value is rejected before modifying the installation. The key is
+not printed during install or rotation, and the script removes it from the environment passed to
+child processes. It remains in the key-bearing `config.env` with restricted permissions.
 
 Run it as your normal administrator account, not root. It calls `sudo` for launchd and, with
 `--user`, to create files and install packages as the selected account. That account must already
@@ -34,16 +51,23 @@ read the user and storage path from the installed launchd plist. Changing `--use
 selecting a writable directory creates a new installation under that user's home; existing keys,
 conversations, and files are **not** migrated. Reinstalling for the same user and path preserves them.
 
-Install displays the session key and prints server routes and commands, then ends with a security
-warning; `start` and `restart` print the same summary. A key reset invalidates the old key for
-clients; if the service is stopped, it stays stopped and uses the new key on the next `start`.
+Install prints routes and commands, then lists how to copy, display, or rotate the session key
+without displaying it by default. It ends with a security warning. `start` and `restart` print the
+server summary. A key reset invalidates the old key for clients; if the service is stopped, it stays
+stopped and uses the new key on the next `start`.
 
 ## Notes
 
 - Install directory: the selected user's `~/.openhands-agent-server` by default, or `OHAS_HOME`
-  (venv, `config.env` with the keys, logs, data).
+  (venv, `config.env` with the keys, logs, data). The installer sets the directory to mode `700`
+  and the key-bearing `config.env` to mode `600`, owned by the service user. Neither install nor
+  key rotation prints the key; only explicitly running `key` does.
+- When listening on `0.0.0.0` (IPv4), summaries and `status` list active non-loopback IPv4
+  interface URLs (including VPN addresses). IPv6 URLs are omitted because that listener cannot
+  accept them. These are local interface addresses, not a public-IP lookup or a guarantee that
+  firewall or network routing permits a connection.
 - `install` defaults to the latest PyPI release. `--ref` installs a branch, tag, or commit from
-  GitHub. Re-running `install` upgrades and keeps the keys, port, and host.
+  GitHub. Re-running `install` upgrades and keeps the keys (unless overridden), port, and host.
 - `stop` also disables the service at boot until you run `start`.
 - `remove` unregisters the service and deletes its launchd plist; `--purge` also deletes the install
   directory. If stopping the service or removing the plist fails, the install directory is kept.
