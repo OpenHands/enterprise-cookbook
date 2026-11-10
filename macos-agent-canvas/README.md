@@ -92,16 +92,10 @@ using the default port (or substitute the URL printed by the installer), run:
 
 ```bash
 curl -fsS --max-time 3 http://127.0.0.1:18100/ready
-./oh-agent-server.sh status
 ```
 
-The unauthenticated `/ready` request succeeds when the server is ready; it does not verify your
-session key or LLM configuration. The `ready: OK` line below comes from `status`, **not** from
-the `curl` response:
-
-```text
-ready: OK (http://127.0.0.1:18100/ready)
-```
+A successful request exits with status 0; the unauthenticated `/ready` endpoint does not verify
+your session key or LLM configuration.
 
 ## Load the Skills
 
