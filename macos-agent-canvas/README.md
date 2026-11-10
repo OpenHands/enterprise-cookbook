@@ -3,7 +3,7 @@
 Install an OpenHands Agent Server on a remote Mac from an OpenHands Enterprise conversation. The
 Mac runs a launchd service; Enterprise supplies the SSH connection and retains its session key as a
 personal or organization secret. The Mac is a separate execution environment, not an Enterprise
-sandbox. This recipe is GitHub-only while we test it on a real Mac (no `example.yaml` yet).
+sandbox. This draft is available for a docs preview, but has not been tested on a real Mac yet.
 
 This first installment covers installation and key management. LLM provisioning and delegating
 macOS work from Enterprise are the next installments, not working steps in this draft.
