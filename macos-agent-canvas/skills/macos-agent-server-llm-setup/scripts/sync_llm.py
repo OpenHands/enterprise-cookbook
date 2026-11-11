@@ -159,8 +159,6 @@ def proxy_url(args: argparse.Namespace, enterprise: str) -> str:
         )
     parts = urllib.parse.urlsplit(enterprise)
     host = parts.hostname or ""
-    if host == "app.all-hands.dev":
-        return f"{parts.scheme}://llm-proxy.app.all-hands.dev"
     if not host.startswith("app."):
         raise UsageError(
             f"cannot work out the LLM proxy host from {host!r}. Pass --llm-base-url "
