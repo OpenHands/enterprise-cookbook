@@ -1,0 +1,13 @@
+{
+  "name": "macos-agent-canvas",
+  "version": "0.1.0",
+  "description": "Install and operate a remote macOS Agent Server from Enterprise sandboxes over HTTPS, including LLM setup and scoped conversation delegation.",
+  "author": {
+    "name": "OpenHands",
+    "email": "contact@all-hands.dev"
+  },
+  "homepage": "https://github.com/OpenHands/enterprise-cookbook/tree/main/macos-agent-canvas",
+  "repository": "https://github.com/OpenHands/enterprise-cookbook",
+  "license": "MIT",
+  "keywords": ["macos", "agent-server", "enterprise", "rest", "delegation"]
+}

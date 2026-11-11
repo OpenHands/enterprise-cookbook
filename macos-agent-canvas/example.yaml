@@ -1,0 +1,5 @@
+---
+title: macOS Agent Server from Enterprise
+description: Operator-install a Mac Agent Server behind TLS, configure its LLM, and delegate scoped conversations from an Enterprise sandbox.
+category: Secrets & authentication
+icon: desktop

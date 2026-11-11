@@ -1,0 +1,21 @@
+{
+  "name": "enterprise-cookbook",
+  "owner": {
+    "name": "OpenHands",
+    "email": "contact@all-hands.dev"
+  },
+  "metadata": {
+    "description": "OpenHands Enterprise cookbook plugins and skills.",
+    "maintainer": "OpenHands",
+    "homepage": "https://github.com/OpenHands/enterprise-cookbook"
+  },
+  "plugins": [
+    {
+      "name": "macos-agent-canvas",
+      "source": "./macos-agent-canvas",
+      "description": "Install and operate a remote macOS Agent Server from Enterprise sandboxes over HTTPS, with scoped conversation delegation.",
+      "category": "integrations",
+      "keywords": ["macos", "agent-server", "enterprise", "delegation"]
+    }
+  ]
+}

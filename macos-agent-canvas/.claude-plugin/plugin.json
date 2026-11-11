@@ -1,0 +1,7 @@
+{
+  "name": "macos-agent-canvas",
+  "version": "0.1.0",
+  "description": "Install and operate a remote macOS Agent Server from Enterprise sandboxes over HTTPS, including LLM setup and scoped conversation delegation.",
+  "license": "MIT",
+  "keywords": ["macos", "agent-server", "enterprise", "rest", "delegation"]
+}
