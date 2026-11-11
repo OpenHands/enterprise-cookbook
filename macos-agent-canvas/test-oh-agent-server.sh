@@ -128,7 +128,9 @@ export PATH="$TMP/bin:$PATH"
 
 # Source the actual functions without dispatching a CLI command. This lets the
 # test point the privileged plist at a temporary file instead of /Library.
-source <(sed '/^\[ \$# -ge 1 \]/,$d' "$HERE/oh-agent-server.sh")
+# macOS Bash 3.2 does not source process-substitution paths reliably.
+sed '/^\[ \$# -ge 1 \]/,$d' "$HERE/oh-agent-server.sh" >"$TMP/installer-functions.sh"
+source "$TMP/installer-functions.sh"
 PLIST="$TMP/agent-server.plist"
 touch "$PLIST"
 wait_healthy() { return 0; }

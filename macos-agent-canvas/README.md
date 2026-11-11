@@ -5,7 +5,8 @@ behind a TLS front end. After installation, an OpenHands Enterprise conversation
 Mac's Agent Server REST API over HTTPS from its sandbox, using a session key and the Mac's
 certificate saved in Enterprise `Settings > Secrets`. Enterprise does **not** SSH to the Mac or
 receive the operator's SSH credentials. The Mac is a separate host, not an Enterprise sandbox.
-This draft has not been tested on a real Mac.
+The automated tests and an isolated TLS check have run on macOS; the launchd install and
+Enterprise sandbox path have not yet been verified on a real Mac.
 
 > [!WARNING]
 > **The session key is all it takes to run commands on the Mac as its service user.** HTTPS
@@ -223,9 +224,10 @@ into chat to debug it. A successful request proves this sandbox can authenticate
 **not** that the Mac has an LLM profile or can run an agent conversation.
 
 > [!IMPORTANT]
-> This recipe has not been exercised against a real Mac. Verify macOS launchd, application
-> firewall behavior, Enterprise sandbox egress, and authenticated REST access on a test Mac
-> before publishing it as a working installation guide.
+> Automated tests and an isolated, loopback-only TLS check passed on macOS, but the actual
+> launchd installation has not been exercised. Verify launchd, application firewall behavior,
+> Enterprise sandbox egress, and authenticated REST access before publishing this as a working
+> installation guide.
 
 ## Give the Mac an LLM and Secrets
 
