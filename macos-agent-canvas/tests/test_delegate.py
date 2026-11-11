@@ -31,10 +31,22 @@ def make_cert(directory):
     cert, key = directory / "cert.pem", directory / "key.pem"
     subprocess.run(
         [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-            "-days", "1", "-subj", "/CN=localhost",
-            "-addext", "subjectAltName=DNS:localhost",
-            "-keyout", str(key), "-out", str(cert),
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=localhost",
+            "-addext",
+            "subjectAltName=DNS:localhost",
+            "-keyout",
+            str(key),
+            "-out",
+            str(cert),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
@@ -47,7 +59,7 @@ class Server:
     def __init__(self, cert_dir):
         self.requests = []
         self.statuses = ["idle", "running", "finished"]
-        self.active_profile = "enterprise"
+        self.active_profile: str | None = "enterprise"
         self.settings_key = "gAAAAA-encrypted-test-key"
         self.create_status = 201
         self.reply_text = "Why can't you trust atoms? They make up everything."
@@ -75,47 +87,60 @@ class Server:
                 elif self.path == "/api/profiles":
                     code, response = 200, {"active_profile": server.active_profile}
                 elif self.path == "/api/settings":
-                    code, response = 200, {
-                        "agent_settings": {
-                            "agent_kind": "openhands",
-                            "schema_version": 1,
-                            "mcp_config": {"secret": "do-not-forward"},
-                            "agent_context": {"secrets": {"OTHER": "do-not-forward"}},
-                            "llm": {
-                                "model": "openhands/gpt-6.1-sol",
-                                "api_key": server.settings_key,
-                            },
-                        }
-                    }
+                    code, response = (
+                        200,
+                        {
+                            "agent_settings": {
+                                "agent_kind": "openhands",
+                                "schema_version": 1,
+                                "mcp_config": {"secret": "do-not-forward"},
+                                "agent_context": {
+                                    "secrets": {"OTHER": "do-not-forward"}
+                                },
+                                "llm": {
+                                    "model": "openhands/gpt-6.1-sol",
+                                    "api_key": server.settings_key,
+                                },
+                            }
+                        },
+                    )
                 elif self.path == "/api/conversations" and self.command == "POST":
                     server.created += 1
                     code, response = server.create_status, {"id": "conversation-123"}
                 elif self.path == "/api/conversations/conversation-123":
-                    code, response = 200, {
-                        "execution_status": server.statuses.pop(0)
-                        if len(server.statuses) > 1
-                        else server.statuses[0]
-                    }
+                    code, response = (
+                        200,
+                        {
+                            "execution_status": server.statuses.pop(0)
+                            if len(server.statuses) > 1
+                            else server.statuses[0]
+                        },
+                    )
                 elif self.path.startswith(
                     "/api/conversations/conversation-123/events/search?"
                 ):
-                    code, response = 200, {
-                        "items": [
-                            {
-                                "kind": "MessageEvent",
-                                "source": "agent",
-                                "llm_message": {
-                                    "content": [{
-                                        "type": "text",
-                                        "text": server.reply_text,
-                                    }],
-                                    "responses_reasoning_item": {
-                                        "encrypted_content": "not-for-logs"
+                    code, response = (
+                        200,
+                        {
+                            "items": [
+                                {
+                                    "kind": "MessageEvent",
+                                    "source": "agent",
+                                    "llm_message": {
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": server.reply_text,
+                                            }
+                                        ],
+                                        "responses_reasoning_item": {
+                                            "encrypted_content": "not-for-logs"
+                                        },
                                     },
-                                },
-                            }
-                        ]
-                    }
+                                }
+                            ]
+                        },
+                    )
                 else:
                     code, response = 404, {"detail": "not found"}
                 payload = json.dumps(response).encode()
@@ -150,12 +175,18 @@ class DelegateTest(unittest.TestCase):
             "MAC_AGENT_SERVER_CA": base64.b64encode(cert.read_bytes()).decode(),
         }
         self.args = [
-            "--target", self.server.url,
-            "--workspace", "/tmp",
-            "--prompt", "Tell me a science dad joke.",
-            "--ca-cert-env", "MAC_AGENT_SERVER_CA",
-            "--poll-interval", "0.01",
-            "--timeout", "0.1",
+            "--target",
+            self.server.url,
+            "--workspace",
+            "/tmp",
+            "--prompt",
+            "Tell me a science dad joke.",
+            "--ca-cert-env",
+            "MAC_AGENT_SERVER_CA",
+            "--poll-interval",
+            "0.01",
+            "--timeout",
+            "0.1",
         ]
         self.output = io.StringIO()
 
@@ -213,13 +244,32 @@ class DelegateTest(unittest.TestCase):
         )
 
     def test_refuses_http_and_relative_workspace_before_contact(self):
-        self.assertEqual(self.run_cli([
-            "--target", "http://localhost:18100", "--workspace", "/tmp",
-            "--prompt", "hi",
-        ]), 2)
-        self.assertEqual(self.run_cli([
-            "--target", self.server.url, "--workspace", "relative", "--prompt", "hi",
-        ]), 2)
+        self.assertEqual(
+            self.run_cli(
+                [
+                    "--target",
+                    "http://localhost:18100",
+                    "--workspace",
+                    "/tmp",
+                    "--prompt",
+                    "hi",
+                ]
+            ),
+            2,
+        )
+        self.assertEqual(
+            self.run_cli(
+                [
+                    "--target",
+                    self.server.url,
+                    "--workspace",
+                    "relative",
+                    "--prompt",
+                    "hi",
+                ]
+            ),
+            2,
+        )
         self.assertEqual(self.server.requests, [])
         self.assertIn("HTTPS", self.output.getvalue())
 
@@ -264,8 +314,8 @@ class DelegateTest(unittest.TestCase):
         self.assertIn("conversation-123", self.output.getvalue())
 
     def test_untrusted_certificate_is_refused_without_ca(self):
-        options = self.args[:self.args.index("--ca-cert-env")]
-        options += self.args[self.args.index("--poll-interval"):]
+        options = self.args[: self.args.index("--ca-cert-env")]
+        options += self.args[self.args.index("--poll-interval") :]
         self.assertEqual(self.run_cli(options), 1)
         self.assertEqual(self.server.requests, [])
         self.assertIn("certificate", self.output.getvalue())

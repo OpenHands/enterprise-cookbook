@@ -157,7 +157,9 @@ def launch(client: Client, args: argparse.Namespace) -> str:
     agent_settings = (
         settings.get("agent_settings") if isinstance(settings, dict) else None
     )
-    llm = agent_settings.get("llm") if isinstance(agent_settings, dict) else None
+    if not isinstance(agent_settings, dict):
+        raise RemoteError("Mac settings did not provide agent settings")
+    llm = agent_settings.get("llm")
     if not isinstance(llm, dict) or not str(llm.get("api_key", "")).startswith(
         "gAAAAA"
     ):
