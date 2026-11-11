@@ -5,8 +5,10 @@ behind a TLS front end. After installation, an OpenHands Enterprise conversation
 Mac's Agent Server REST API over HTTPS from its sandbox, using a session key and the Mac's
 certificate saved in Enterprise `Settings > Secrets`. Enterprise does **not** SSH to the Mac or
 receive the operator's SSH credentials. The Mac is a separate host, not an Enterprise sandbox.
-The automated tests and an isolated TLS check have run on macOS; the launchd install and
-Enterprise sandbox path have not yet been verified on a real Mac.
+Automated tests and a real launchd install, authenticated local/LAN TLS, stop/start,
+reinstall, source allow-list, and purge have passed on macOS 15.6.1 (arm64). The Mac's
+application firewall was disabled during testing. Reboot persistence, LLM/secrets sync,
+and the Enterprise sandbox-to-Mac path remain unverified.
 
 > [!WARNING]
 > **The session key is all it takes to run commands on the Mac as its service user.** HTTPS
@@ -224,10 +226,10 @@ into chat to debug it. A successful request proves this sandbox can authenticate
 **not** that the Mac has an LLM profile or can run an agent conversation.
 
 > [!IMPORTANT]
-> Automated tests and an isolated, loopback-only TLS check passed on macOS, but the actual
-> launchd installation has not been exercised. Verify launchd, application firewall behavior,
-> Enterprise sandbox egress, and authenticated REST access before publishing this as a working
-> installation guide.
+> On macOS 15.6.1, both launchd services ran and authenticated REST worked locally and via
+> the Mac's private LAN address. The application firewall was off; a client on a second
+> machine, enabled-firewall behavior, and Enterprise sandbox egress have **not** been tested.
+> Verify those paths in your own network before relying on this installation for Enterprise.
 
 ## Give the Mac an LLM and Secrets
 
@@ -341,7 +343,8 @@ deleting and re-adding the `MAC_AGENT_SERVER_CA` secret. To replace it sooner, d
    REST requests from the Enterprise sandbox after validating the LLM profile and the host's
    tool permissions. No Enterprise SSH access is part of this flow.
 2. **Hardening:** Rotate the session key without re-pasting by hand, add certificates from a
-   private CA instead of a self-signed one, and test on real macOS and a Replicated VM.
+   private CA instead of a self-signed one, and test reboot persistence, the enabled macOS
+   application firewall, dedicated service users, and a Replicated VM.
 
 ## APIs Used
 
