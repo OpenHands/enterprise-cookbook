@@ -96,7 +96,7 @@ git clone --branch macOS-agent-canvas https://github.com/OpenHands/enterprise-co
 The script runs as the **operator**, not root, and prompts for the Mac administrator's sudo
 password when registering or starting the launchd services. It:
 
-1. installs the Agent Server in `~/.openhands-agent-server` and binds it to `127.0.0.1:18100`;
+1. installs the Agent Server in `~/.openhands-enterprise-mac-agent` and binds it to `127.0.0.1:18100`;
 2. creates a session key and an independent encryption key, **without printing either**;
 3. creates a self-signed certificate for the name you gave, valid for about 825 days, and
    keeps the private key on the Mac with mode `600`;
@@ -315,9 +315,16 @@ disables it until a later `start`, and `restart` preserves the key. `logs` shows
 Server's log and `logs --tls` the TLS front end's. `remove --purge` destroys the installation,
 certificate, and conversations; it is not routine management. `key` displays the credential, so
 use it only in a private operator terminal. The default directory is the service user's
-`~/.openhands-agent-server` (virtual environment, logs, data, `tls/`, `config.env`). That
-directory is mode `700`; `config.env` and the certificate's private key are mode `600`.
-Changing service users does not migrate keys, certificates, or conversations.
+`~/.openhands-enterprise-mac-agent` (virtual environment, logs, data, `tls/`,
+`config.env`). The launchd wrapper sets `OH_PERSISTENCE_DIR` to this directory's `state/`
+for profiles, settings, and secrets; it also keeps conversations, the default workspace,
+and worktrees under `data/`. These are separate from the SDK's shared `~/.openhands`.
+The install directory and `state/` are mode `700`; `config.env` and the certificate's
+private key are mode `600`. `remove --purge` refuses directories not recognized as this
+recipe's installations. Changing service users does not migrate keys, certificates,
+or conversations. Existing installations are found from their launchd plist and retain
+their old directory when upgraded; profiles previously saved in the shared
+`~/.openhands` are not automatically moved into the isolated `state/`.
 
 ### Certificate Renewal
 

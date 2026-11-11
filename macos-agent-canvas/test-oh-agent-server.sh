@@ -4,6 +4,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+trap 'echo "installer assertion failed near line $LINENO" >&2' ERR
 assert_not_in_file() {
   if grep -Fq "$1" "$2"; then
     echo "unexpected text in $2" >&2
@@ -126,6 +127,9 @@ EOF
 chmod +x "$TMP/bin/id" "$TMP/bin/sudo" "$TMP/bin/pbcopy" "$TMP/bin/ifconfig" "$TMP/bin/curl" "$OHAS_TARGET_HOME/.local/bin/uv"
 export PATH="$TMP/bin:$PATH"
 
+help_output="$(env -u OHAS_HOME /bin/bash "$HERE/oh-agent-server.sh" --help)"
+[[ "$help_output" == *"$HOME/.openhands-enterprise-mac-agent"* ]] || exit 1
+
 # Source the actual functions without dispatching a CLI command. This lets the
 # test point the privileged plist at a temporary file instead of /Library.
 # macOS Bash 3.2 does not source process-substitution paths reliably.
@@ -167,7 +171,7 @@ load_config
 [ "$OH_SECRET_KEY" = encryption-key ]
 [ "$OHAS_HOST:$OHAS_PORT" = 127.0.0.1:18100 ]
 [ "$output" = "==> Session API key rotated; service is stopped. Run: $0 start" ]
-[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]]
+[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]] || exit 1
 [ "$(cmd_key)" = "$OH_SESSION_API_KEYS_0" ]
 [ ! -f "$OHAS_HOME/restarts" ]
 
@@ -175,7 +179,7 @@ export OHAS_SESSION_API_KEY='provided-reset_key.1234567890abcdefghij'
 output="$(cmd_key --reset)"
 load_config
 [ "$OH_SESSION_API_KEYS_0" = "$OHAS_SESSION_API_KEY" ]
-[[ "$output" != *"$OHAS_SESSION_API_KEY"* ]]
+[[ "$output" != *"$OHAS_SESSION_API_KEY"* ]] || exit 1
 [ "$(stat -f '%Sp' "$CONFIG")" = -rw------- ]
 unset OHAS_SESSION_API_KEY
 
@@ -190,13 +194,13 @@ unset OHAS_SESSION_API_KEY
 [ "$(cat "$OHAS_CLIPBOARD")" = "$OH_SESSION_API_KEYS_0" ]
 [ "$(cat "$OHAS_HOME/restarts")" = restart ]
 [ "${output##*$'\n'}" = '==> Session API key copied to clipboard' ]
-[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]]
+[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]] || exit 1
 
 output="$(cmd_start)"
-[[ "$output" == *'Agent Server: http://127.0.0.1:18100'* ]]
-[[ "$output" == *'/v1/'* && "$output" == *'/sockets/'* && "$output" == *'key [--copy] [--reset [--defer-restart|--unattended]]'* ]]
+[[ "$output" == *'Agent Server: http://127.0.0.1:18100'* ]] || exit 1
+[[ "$output" == *'/v1/'* && "$output" == *'/sockets/'* && "$output" == *'key [--copy] [--reset [--defer-restart|--unattended]]'* ]] || exit 1
 output="$(cmd_restart)"
-[[ "$output" == *'/openapi.json'* && "$output" == *'/ready'* ]]
+[[ "$output" == *'/openapi.json'* && "$output" == *'/ready'* ]] || exit 1
 [ "$(wc -l <"$OHAS_HOME/restarts" | tr -d ' ')" -eq 2 ]
 
 before="$OH_SESSION_API_KEYS_0"
@@ -204,7 +208,7 @@ output="$(cmd_key --reset)"
 load_config
 [ "$OH_SESSION_API_KEYS_0" != "$before" ]
 [ "$output" = '==> Session API key rotated; existing clients must use the new key' ]
-[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]]
+[[ "$output" != *"$OH_SESSION_API_KEYS_0"* ]] || exit 1
 [ "$(cat "$OHAS_CLIPBOARD")" = "$before" ]
 [ "$(wc -l <"$OHAS_HOME/restarts" | tr -d ' ')" -eq 3 ]
 
@@ -257,6 +261,11 @@ awk '/^  Session API key:/{if (prev != "" || prev2 != "") exit 1; found=1} {prev
 grep -Fq "Copy without displaying:   $0 key --copy" "$TMP/install-output"
 grep -Fq "Display in terminal:       $0 key" "$TMP/install-output"
 grep -Fq "Rotate without displaying: $0 key --reset" "$TMP/install-output"
+grep -Fxq "$LABEL" "$ROOT/.ohas-managed"
+grep -Fq 'export OH_PERSISTENCE_DIR="$ROOT/state"' "$WRAPPER"
+grep -Fq 'export OH_CONVERSATIONS_PATH="$ROOT/data/conversations"' "$WRAPPER"
+grep -Fq 'export OH_WORKSPACE_PATH="$ROOT/data/project"' "$WRAPPER"
+grep -Fq 'export OH_CONVERSATION_WORKTREE_ROOT="$ROOT/data/worktrees"' "$WRAPPER"
 grep -Fq 'Custom key: Set OHAS_SESSION_API_KEY for install or key --reset.' "$TMP/install-output"
 grep -Fq 'Requires 32+ chars: A-Z a-z 0-9 . _ ~ + / = -' "$TMP/install-output"
 [ "$(plutil -extract UserName raw -o - "$PLIST")" = agenttest ]
@@ -265,6 +274,12 @@ grep -Fq 'Requires 32+ chars: A-Z a-z 0-9 . _ ~ + / = -' "$TMP/install-output"
 [ "$(stat -f '%Sp' "$OHAS_HOME")" = drwx------ ]
 [ "$(stat -f '%Sp' "$OHAS_HOME/config.env")" = -rw------- ]
 [ "$(stat -f '%Sp' "$OHAS_HOME/run-server.sh")" = -rwxr-xr-x ]
+cp "$VENV/bin/python" "$TMP/python-original"
+printf '#!/bin/bash\nprintf "%%s\\n" "$OH_PERSISTENCE_DIR" "$OH_CONVERSATIONS_PATH" "$OH_WORKSPACE_PATH" "$OH_CONVERSATION_WORKTREE_ROOT"\n' >"$VENV/bin/python"
+paths="$(/bin/bash "$WRAPPER")"
+cp "$TMP/python-original" "$VENV/bin/python"
+expected_paths="$(printf '%s\n' "$ROOT/state" "$ROOT/data/conversations" "$ROOT/data/project" "$ROOT/data/worktrees")"
+[ "$paths" = "$expected_paths" ]
 [ "$(grep -c '^agenttest$' "$TMP_USER_COMMANDS")" -gt 0 ]
 load_config
 before="$OH_SESSION_API_KEYS_0"
@@ -273,12 +288,19 @@ unset OHAS_SESSION_API_KEY
 assert_not_in_file "$before" "$TMP/install-output"
 assert_not_in_file 'Local network URLs' "$TMP/install-output"
 
+mkdir -p "$TMP/unmanaged-install"
+touch "$TMP/unmanaged-install/unrelated-data"
+if (export OHAS_HOME="$TMP/unmanaged-install"; set_root "$OHAS_HOME"; cmd_install --user agenttest >/dev/null 2>&1); then exit 1; fi
+[ -f "$TMP/unmanaged-install/unrelated-data" ] && [ -f "$PLIST" ]
+
 unset OHAS_HOME
 select_installed_service
 [ "$ROOT" = "$TMP/managed" ]
 [ "$SERVICE_USER" = agenttest ]
+rm "$ROOT/.ohas-managed"
 bootouts_before="$(grep -c '^bootout$' "$OHAS_TEST_CALLS" || true)"
 cmd_install --host 127.0.0.1 >"$TMP/reinstall-output" 2>&1
+grep -Fxq "$LABEL" "$ROOT/.ohas-managed"
 grep -Fq 'WARNING: Anyone who can reach this server and has the X-Session-API-Key can execute arbitrary shell commands as agenttest.' "$TMP/reinstall-output"
 [ "$(tail -n 2 "$TMP/reinstall-output" | head -n 1)" = 'WARNING: Anyone who can reach this server and has the X-Session-API-Key can execute arbitrary shell commands as agenttest.' ]
 [ "$(tail -n 1 "$TMP/reinstall-output")" = '         Keep the key secret; use --host 127.0.0.1 for local-only access.' ]
@@ -286,7 +308,7 @@ grep -Fq 'WARNING: Anyone who can reach this server and has the X-Session-API-Ke
 [ "$(tail -n 1 "$OHAS_TEST_CALLS")" = kickstart ]
 load_config
 [ "$OH_SESSION_API_KEYS_0" = "$before" ]
-[[ "$(cat "$TMP/reinstall-output")" == *'Runs as: agenttest'* ]]
+[[ "$(cat "$TMP/reinstall-output")" == *'Runs as: agenttest'* ]] || exit 1
 assert_not_in_file "$before" "$TMP/reinstall-output"
 
 export OHAS_SESSION_API_KEY='provided-upgrade_key.1234567890abcdefghij'
@@ -350,10 +372,10 @@ write_config 127.0.0.1 18100 previous-user-key previous-secret
 write_plist
 unset OHAS_HOME
 cmd_install --user agenttest --host 127.0.0.1 >"$TMP/change-user-output"
-[ "$ROOT" = "$OHAS_TARGET_HOME/.openhands-agent-server" ]
+[ "$ROOT" = "$OHAS_TARGET_HOME/.openhands-enterprise-mac-agent" ]
 [ "$(plutil -extract UserName raw -o - "$PLIST")" = agenttest ]
 [ -f "$TMP/previous-user/config.env" ]
-[[ "$(cat "$TMP/change-user-output")" == *'old files are not migrated'* ]]
+[[ "$(cat "$TMP/change-user-output")" == *'old files are not migrated'* ]] || exit 1
 
 export OHAS_DENY_SUDO=1
 if (cmd_remove --purge --yes >/dev/null 2>&1); then exit 1; fi
@@ -374,6 +396,19 @@ export OHAS_TEST_KEEP_PLIST=1
 if (cmd_remove --purge --yes >/dev/null 2>&1); then exit 1; fi
 [ -f "$PLIST" ] && [ -d "$ROOT" ]
 unset OHAS_TEST_KEEP_PLIST
+
+managed_root="$ROOT"
+mkdir -p "$TMP/unmanaged"
+touch "$TMP/unmanaged/unrelated-data"
+set_root "$TMP/unmanaged"
+if (cmd_remove --purge --yes >/dev/null 2>&1); then exit 1; fi
+[ -f "$TMP/unmanaged/unrelated-data" ] && [ -f "$PLIST" ]
+mv "$PLIST" "$TMP/held-plist"
+bootouts_before="$(grep -c '^bootout$' "$OHAS_TEST_CALLS" || true)"
+if (cmd_remove --purge --yes >/dev/null 2>&1); then exit 1; fi
+[ -f "$TMP/unmanaged/unrelated-data" ] && [ "$(grep -c '^bootout$' "$OHAS_TEST_CALLS" || true)" -eq "$bootouts_before" ]
+mv "$TMP/held-plist" "$PLIST"
+set_root "$managed_root"
 
 cmd_remove --purge --yes >"$TMP/remove-output"
 [ ! -e "$PLIST" ] && [ ! -e "$ROOT" ]
@@ -431,7 +466,7 @@ assert_not_in_file "$tls_key" "$TMP/tls-install-output"
 
 [ "$(cmd_ca --pem)" = "$(cat "$ROOT/tls/cert.pem")" ]
 ca_line="$(cmd_ca)"
-[[ "$ca_line" != *$'\n'* && "$ca_line" != *' '* ]]
+[[ "$ca_line" != *$'\n'* && "$ca_line" != *' '* ]] || exit 1
 [ "$(printf '%s' "$ca_line" | base64 -d)" = "$(cat "$ROOT/tls/cert.pem")" ]
 [ "$(cmd_ca --copy)" = '==> TLS certificate copied to clipboard' ]
 [ "$(cat "$OHAS_CLIPBOARD")" = "$ca_line" ]
@@ -442,7 +477,7 @@ real_python="$(cat "$VENV/bin/python")"
 printf '#!/bin/bash\nprintf "%%s\\n" "$@"\n' >"$VENV/bin/python"
 wrapper_args="$(bash "$TLS_WRAPPER" | tr '\n' ' ')"
 printf '%s\n' "$real_python" >"$VENV/bin/python"
-[[ "$wrapper_args" == *"tls_front.py serve --cert $ROOT/tls/cert.pem --key $ROOT/tls/key.pem --listen-port 18443 --upstream-port 18100 --allow-from 192.0.2.0/24 --allow-from 198.51.100.0/24 "* ]]
+[[ "$wrapper_args" == *"tls_front.py serve --cert $ROOT/tls/cert.pem --key $ROOT/tls/key.pem --listen-port 18443 --upstream-port 18100 --allow-from 192.0.2.0/24 --allow-from 198.51.100.0/24 "* ]] || exit 1
 
 # reinstalling without TLS options keeps the settings and the certificate
 cert_before="$(cat "$ROOT/tls/cert.pem")"
@@ -459,12 +494,12 @@ cmd_install --tls-name 203.0.113.9 --tls-port 18444 >"$TMP/tls-rename-output" 2>
 load_config
 [ "$OHAS_TLS_NAME" = 203.0.113.9 ] && [ "$OHAS_TLS_PORT" = 18444 ]
 [ "$cert_before" != "$(cat "$ROOT/tls/cert.pem")" ]
-[[ "$(cat "$TMP/tls-rename-output")" == *'names=localhost,203.0.113.9,127.0.0.1'* ]]
+[[ "$(cat "$TMP/tls-rename-output")" == *'names=localhost,203.0.113.9,127.0.0.1'* ]] || exit 1
 
 # status, stop, start, restart cover both services
 output="$(cmd_status)"
-[[ "$output" == *'tls: https://203.0.113.9:18444 (allowed from: 192.0.2.0/24,198.51.100.0/24)'* ]]
-[[ "$output" == *'tls launchd: loaded'* && "$output" == *'tls ready: OK'* && "$output" == *'tls cert: names='* ]]
+[[ "$output" == *'tls: https://203.0.113.9:18444 (allowed from: 192.0.2.0/24,198.51.100.0/24)'* ]] || exit 1
+[[ "$output" == *'tls launchd: loaded'* && "$output" == *'tls ready: OK'* && "$output" == *'tls cert: names='* ]] || exit 1
 cmd_stop >/dev/null
 [ ! -f "$OHAS_TEST_TLS_LOADED" ] && [ "$(tls_calls tls-bootout)" -eq 1 ]
 kickstarts="$(tls_calls tls-kickstart)"
@@ -479,7 +514,7 @@ load_config
 [ -z "$OHAS_TLS_NAME" ] && [ -z "$OHAS_TLS_PORT" ] && [ "$OHAS_HOST" = 127.0.0.1 ]
 [ ! -e "$TLS_PLIST" ] && [ ! -f "$OHAS_TEST_TLS_LOADED" ] && [ -f "$PLIST" ]
 if (cmd_ca >/dev/null 2>&1); then exit 1; fi
-[[ "$(cat "$TMP/no-tls-output")" == *'Agent Server: http://127.0.0.1:18100'* ]]
+[[ "$(cat "$TMP/no-tls-output")" == *'Agent Server: http://127.0.0.1:18100'* ]] || exit 1
 
 # remove deletes both registrations
 cmd_install --tls-name mac.test.example >/dev/null 2>&1
