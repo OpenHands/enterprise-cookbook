@@ -1,22 +1,27 @@
 # macOS Agent Server from OpenHands Enterprise
 
-An operator installs OpenHands Agent Server on a Mac over SSH from their own workstation,
-behind a TLS front end. After installation, an OpenHands Enterprise conversation calls the
-Mac's Agent Server REST API over HTTPS from its sandbox, using a session key and the Mac's
-certificate saved in Enterprise `Settings > Secrets`. Enterprise does **not** SSH to the Mac or
-receive the operator's SSH credentials. The Mac is a separate host, not an Enterprise sandbox.
-Automated tests and a real launchd install, authenticated local/LAN TLS, stop/start,
-reinstall, source allow-list, and purge have passed on macOS 15.6.1 (arm64). The Mac's
-application firewall was disabled during testing. Reboot persistence, LLM/secrets sync,
-and the Enterprise sandbox-to-Mac path remain unverified.
+An operator installs OpenHands Agent Server on a Mac over SSH from their own workstation.
+An OpenHands Enterprise conversation then calls its REST API over HTTPS from a sandbox,
+using a session key saved in Enterprise `Settings > Secrets`. The default route uses the
+Mac's TLS front end and a pinned certificate on a private network. For a temporary demo
+when the sandbox cannot reach the Mac's network, an optional ngrok endpoint can provide
+HTTPS to the same loopback-only Agent Server without changing the sandbox's REST client.
+Enterprise does **not** SSH to the Mac or receive the operator's SSH credentials. The Mac
+is a separate host, not an Enterprise sandbox. Automated tests and a real launchd install,
+authenticated local/LAN TLS, stop/start, reinstall, source allow-list, and purge have passed
+on macOS 15.6.1 (arm64). The Mac's application firewall was disabled during testing.
+Reboot persistence, LLM/secrets sync, and the sandbox-to-Mac Agent Server path remain
+unverified; a sandbox-to-Mac ngrok test with a fixed-response server did pass.
 
 > [!WARNING]
 > **The session key is all it takes to run commands on the Mac as its service user.** HTTPS
-> keeps the key, requests, and responses from being read or changed on the network, and the
-> sandbox trusts only this Mac's own certificate. It does not limit who can try the key, so
-> also limit which networks can reach the TLS port (`--allow-from` and the firewall), and
-> consider a dedicated service account. Showing the key in the operator's terminal exposes it
-> to terminal scrollback, screen sharing, and recordings.
+> protects it in transit. On a private network, the sandbox pins the Mac's certificate and
+> the firewall and `--allow-from` limit who can reach the TLS port. An ngrok demo puts the
+> API on a public HTTPS address; anyone can try the key, so use it only temporarily, keep
+> ngrok's request inspection off, and stop the tunnel after testing. Ngrok terminates TLS
+> and can see requests and secrets; the Mac receives HTTP on loopback. Consider a dedicated
+> service account. Showing the key in the operator's terminal exposes it to terminal
+> scrollback, screen sharing, and recordings.
 
 ## How It Works
 
@@ -37,10 +42,13 @@ sequenceDiagram
 ```
 
 The Agent Server speaks plain HTTP, and calls itself over plain HTTP on loopback, so it cannot
-terminate TLS itself. The installer binds it to `127.0.0.1` and runs
-[`tls_front.py`](./tls_front.py), a small TLS tunnel built on the Python standard library, as a
-second launchd service on a network port. It copies bytes in both directions without parsing
-them, so REST calls and WebSockets both work.
+terminate TLS itself. In the **private-network flow shown above**, the installer binds it to
+`127.0.0.1` and runs [`tls_front.py`](./tls_front.py), a small TLS tunnel built on the Python
+standard library, as a second launchd service on a network port. It copies bytes in both
+directions without parsing them, so REST calls and WebSockets both work. In the **ngrok demo
+flow**, the operator instead runs ngrok on the Mac: the sandbox connects to ngrok over HTTPS,
+and ngrok forwards over its tunnel to the same `127.0.0.1:18100` HTTP listener. Neither flow
+needs inbound SSH from Enterprise or a publicly bound Agent Server listener.
 
 The installer also generates an independent `OH_SECRET_KEY` to encrypt the Mac server's stored
 secrets. The session key authenticates HTTP clients; it is **not** an LLM provider key or an SSH
@@ -60,14 +68,17 @@ for later management. All three are bundled in this recipe's
   account; for a dedicated non-admin service account, provision its home and `uv` first and
   pass `--user ACCOUNT` to the installer. That account's files and processes will be available
   to anyone with the session key. The operator still runs the installer and authorizes sudo.
-- Choose the **host name or IP address that Enterprise sandboxes use to reach the Mac**. The
-  installer issues the certificate for that name, and clients refuse any other name. It must
-  resolve from the sandboxes.
-- The customer's firewall must allow TCP port `18443` (the TLS port) **only from the intended
-  Enterprise sandbox network**, and nothing else needs to reach the Mac. Verify that sandbox
-  egress and the Mac's application firewall permit the connection. SSH is needed only between
-  the operator workstation and Mac; successful operator SSH does not establish
-  sandbox-to-Mac reachability. Do not expose the API on the public internet.
+- For the private-network route, choose the **host name or IP address that Enterprise
+  sandboxes use to reach the Mac**. The installer issues the certificate for that name, and
+  clients refuse any other name. It must resolve from the sandboxes. The customer's firewall
+  must allow TCP port `18443` **only from the intended Enterprise sandbox network**. Verify
+  sandbox egress and the Mac's application firewall; operator SSH does not prove reachability.
+- For the temporary ngrok demo route, install and authenticate the [ngrok agent](https://ngrok.com/docs/agent/)
+  **on the Mac**, and use an available HTTPS hostname in your own ngrok account. Ngrok needs
+  outbound internet access from the Mac; the sandbox needs outbound HTTPS to that hostname.
+  No inbound Mac port, public HTTP bind, Enterprise SSH credential, or network routing change
+  is needed. An account's default dev hostname may already be in use; choose another
+  available hostname rather than pooling with an existing endpoint.
 - The operator has Enterprise browser access to the intended organization and
   `Settings > Secrets`. A member can save a personal secret; an Admin/Owner is required for an
   organization-shared secret. A new conversation must have the secrets in its scope and, if
@@ -83,27 +94,34 @@ export MAC_SSH=admin@mac.example.net
 ssh "$MAC_SSH"
 ```
 
-In that **Mac shell**, clone the recipe and install the server. Until this recipe is merged,
-use the `macOS-agent-canvas` branch; change it to `main` after publication. Review the source
-beforehand, or separate the clone and install to inspect the downloaded files. The `&&`
-operators stop the install if an earlier command fails. Do not pipe a downloaded script to a
-shell. Replace `mac.internal.example` with the name sandboxes use for this Mac:
+In that **Mac shell**, clone the recipe. Until this recipe is merged, use the
+`macOS-agent-canvas` branch; change it to `main` after publication. Review the source before
+installing. Do not pipe a downloaded script to a shell:
 
 ```bash
 git clone --branch macOS-agent-canvas https://github.com/OpenHands/enterprise-cookbook.git "$HOME/enterprise-cookbook" &&
-  cd "$HOME/enterprise-cookbook/macos-agent-canvas" &&
-  ./oh-agent-server.sh install --tls-name mac.internal.example
+  cd "$HOME/enterprise-cookbook/macos-agent-canvas"
 ```
 
-The script runs as the **operator**, not root, and prompts for the Mac administrator's sudo
-password when registering or starting the launchd services. It:
+Choose **one** transport. The installer runs as the **operator**, not root, and prompts for the
+Mac administrator's sudo password when registering or starting the launchd service(s). Both
+choices install in `~/.openhands-enterprise-mac-agent`, bind the Agent Server to
+`127.0.0.1:18100`, and generate a session key and separate encryption key **without printing
+either**.
 
-1. installs the Agent Server in `~/.openhands-enterprise-mac-agent` and binds it to `127.0.0.1:18100`;
-2. creates a session key and an independent encryption key, **without printing either**;
-3. creates a self-signed certificate for the name you gave, valid for about 825 days, and
-   keeps the private key on the Mac with mode `600`;
-4. registers the Agent Server and the TLS front end (port `18443`) as launchd services that
-   start at boot, and waits until both answer.
+<!-- docs:tabs -->
+
+### Private network (Mac TLS front end)
+
+Replace `mac.internal.example` with the name the sandboxes use for the Mac:
+
+```bash
+./oh-agent-server.sh install --tls-name mac.internal.example
+```
+
+The installer creates a self-signed certificate for that name (about 825 days, private key mode
+`600`) and registers **two** launchd services, including the TLS front end on port `18443`.
+Example summary:
 
 ```text
 ==> Installed and running
@@ -115,6 +133,30 @@ password when registering or starting the launchd services. It:
   Allowed from: any source address
 ```
 
+### Temporary ngrok demo (no Mac TLS front end)
+
+Install just the loopback-only Agent Server as **one** launchd service:
+
+```bash
+./oh-agent-server.sh install --no-tls --host 127.0.0.1
+```
+
+On the **Mac**, in a separate terminal, start the already authenticated ngrok agent. Replace
+`YOUR_NGROK_HOSTNAME` with an available hostname in your own ngrok account (not the literal
+`{$random}` dashboard template). Leave this process running during the demo:
+
+```bash
+ngrok http 127.0.0.1:18100 --url https://YOUR_NGROK_HOSTNAME --inspect=false
+```
+
+Ngrok terminates public HTTPS and forwards to the Mac's loopback-only HTTP listener; its
+endpoint is independent of the launchd service. Do **not** bind the Agent Server to `0.0.0.0`,
+use `--pooling-enabled` with another endpoint, enable request inspection, or use an
+`--allow-insecure-http` client. Stop ngrok after the demo. The default ngrok dev hostname can
+already be occupied; use an available hostname instead of interrupting an existing endpoint.
+
+<!-- /docs:tabs -->
+
 Options you can add to the install command:
 
 | Option | Effect |
@@ -122,10 +164,12 @@ Options you can add to the install command:
 | `--allow-from CIDR[,CIDR…]` | The TLS front end accepts connections only from these networks, in addition to your firewall. The Mac sees the address the sandbox's traffic leaves your network from, which may be a NAT gateway. |
 | `--tls-port N` | Use a different TLS port (default `18443`). |
 | `--user ACCOUNT` | Run as an existing dedicated service account. Verify `uv` is available to it first. |
-| `--no-tls` | Remove the TLS front end. The Agent Server stays on `127.0.0.1`; add `--host 0.0.0.0` for a plain-HTTP network bind, which this recipe does not support. |
+| `--no-tls` | Remove the Mac TLS front end; use only when a separate HTTPS proxy such as ngrok forwards to `127.0.0.1:18100`. Do not bind plain HTTP to the network. |
 
-Reinstalling with the same user and path keeps the keys, ports, TLS settings, and the
-certificate unless you override them, so the saved secrets stay valid. If this checkout already
+Reinstalling with the same user and path keeps the keys, ports, TLS settings, and (in the
+private-network flow) the certificate unless you override them, so the saved secrets stay
+valid. Switching routes requires explicitly installing with `--no-tls` or `--tls-name NAME`;
+`install` without either option preserves the previous transport. If this checkout already
 exists, inspect its branch and changes, update it with `git fetch` / `git checkout`, and install
 from `macOS-agent-canvas`.
 
@@ -135,9 +179,10 @@ from `macOS-agent-canvas`.
 > `127.0.0.1:18100`. Use the proxy's address as the target below. You need
 > `MAC_AGENT_SERVER_CA` only if the proxy's certificate comes from a private CA.
 
-Check the install from the same Mac shell. The installer already waits for both services;
-`status` shows them, the certificate's expiry, and a pinned HTTPS check, and exits non-zero if
-the Agent Server or the TLS front end does not answer:
+Check the install from the same Mac shell. The installer waits for its launchd service(s).
+`status` checks the Agent Server; with the private-network route it also shows the TLS
+service, certificate expiry, and a pinned HTTPS check. It does **not** check an external
+ngrok process or the sandbox's network path:
 
 ```bash
 ./oh-agent-server.sh status
@@ -147,7 +192,7 @@ curl -fsS --max-time 3 http://127.0.0.1:18100/ready
 A successful `/ready` response confirms the process, **not** API authentication, network
 reachability from an Enterprise sandbox, or a configured LLM.
 
-## Save the Session Key and Certificate in Enterprise
+## Save the Session Key in Enterprise
 
 In the **Mac shell on the operator workstation**, deliberately display the generated key once:
 
@@ -165,7 +210,11 @@ terminal recording or screen sharing while displaying it; clear the workstation 
 terminal scrollback when finished. Enterprise settings will not show the stored value again.
 (`key --copy` copies to the clipboard **of the Mac**, which helps only when you are at the Mac.)
 
-Then save the certificate the same way, as `MAC_AGENT_SERVER_CA`, with the same scope:
+<!-- docs:tabs -->
+
+### Private network (Mac TLS front end)
+
+Also save the certificate as `MAC_AGENT_SERVER_CA` with the same scope:
 
 ```bash
 ./oh-agent-server.sh ca
@@ -180,17 +229,25 @@ single-line field. The certificate is not secret, but saving it as a secret make
 to the sandbox without putting it in a prompt. `install` and `status` print the certificate's
 fingerprint, and `./oh-agent-server.sh ca --pem` shows the PEM text, if you want to inspect it.
 
-If either secret name already exists, **stop**: do not overwrite the Mac key or create a second
-value unintentionally. Replacing a saved value in the UI requires deleting and re-adding that
-secret, and existing conversations may retain an older value. Key rotation is outside this
-first-install flow. See [Enterprise Secrets Management](https://docs.openhands.dev/enterprise/secrets-management)
-for scope and rotation details. Once the values are saved, the operator may exit the Mac SSH
-shell; no Enterprise SSH credential is needed.
+### Temporary ngrok demo
+
+Save **only** `MAC_AGENT_SERVER_KEY`. Ngrok presents a certificate signed by a public CA, so
+the sandbox's default trust store verifies it; the Mac's `ca` command is unavailable after
+`install --no-tls`. Do not create or reuse `MAC_AGENT_SERVER_CA` for this route.
+
+<!-- /docs:tabs -->
+
+If a required secret name already exists, **stop**: do not overwrite the Mac key or create a
+second value unintentionally. Replacing a saved value in the UI requires deleting and
+re-adding that secret, and existing conversations may retain an older value. Key rotation is
+outside this first-install flow. See [Enterprise Secrets Management](https://docs.openhands.dev/enterprise/secrets-management)
+for scope and rotation details. No Enterprise SSH credential is needed. In the ngrok demo,
+keep the ngrok process running until the sandbox check is finished.
 
 ## Verify from an Enterprise Sandbox
 
-Start a **new** Enterprise conversation in the organization with access to both secrets. If
-using this recipe as a plugin, include the following `plugins` field in the
+Start a **new** Enterprise conversation in the organization with access to the saved secret(s).
+If using this recipe as a plugin, include the following `plugins` field in the
 conversation-start request; this is JSON for the request, **not** a shell command:
 
 ```json
@@ -205,10 +262,16 @@ conversation-start request; this is JSON for the request, **not** a shell comman
 
 See [`load-plugin`](../load-plugin/) for a full conversation-start example. Plugins provide
 instructions, not credentials or network access. In the **Enterprise sandbox's terminal**,
-replace `mac.internal.example` with the name you gave the installer and run this **read-only,
-authenticated** REST check. The secrets are exported into the command environment when
-referenced by name; neither the command nor its output displays their values. `curl` trusts
-only the certificate you saved:
+run the appropriate **read-only, authenticated** REST check. The secrets are exported into the
+command environment when referenced by name; neither the command nor its output displays
+their values.
+
+<!-- docs:tabs -->
+
+### Private network (Mac TLS front end)
+
+Replace `mac.internal.example` with the name given to the installer. `curl` trusts only the
+certificate saved in `MAC_AGENT_SERVER_CA`:
 
 ```bash
 curl -fsS --max-time 10 --output /dev/null \
@@ -218,18 +281,35 @@ curl -fsS --max-time 10 --output /dev/null \
   printf 'Authenticated Mac Agent Server API is reachable.\n'
 ```
 
+### Temporary ngrok demo
+
+Replace `YOUR_NGROK_HOSTNAME` with the live ngrok endpoint's hostname. Standard system CA trust
+verifies ngrok's public certificate; do not use `--insecure` or the Mac CA secret:
+
+```bash
+curl -fsS --max-time 10 --output /dev/null \
+  -H "X-Session-API-Key: $MAC_AGENT_SERVER_KEY" \
+  'https://YOUR_NGROK_HOSTNAME/api/settings' &&
+  printf 'Authenticated Mac Agent Server API is reachable via ngrok.\n'
+```
+
+<!-- /docs:tabs -->
+
 `/api/settings` requires the session key; suppressing its response avoids displaying settings
-in the transcript. If this fails, stop and check the name (`curl: (60)` or `SSL: no alternative
-certificate subject name` means it differs from the certificate's), the firewall and
-`--allow-from`, sandbox egress, secret scope, and Agent Profile selection. Do not paste the key
-into chat to debug it. A successful request proves this sandbox can authenticate to this API,
-**not** that the Mac has an LLM profile or can run an agent conversation.
+in the transcript. If this fails, stop and check the hostname and certificate, sandbox egress,
+secret scope, and Agent Profile selection. For the private route also check the firewall and
+`--allow-from`; for ngrok check its agent is still running and its endpoint is online. Do not
+paste the key into chat to debug it. A successful request proves this sandbox can authenticate
+to the Mac API, **not** that the Mac has an LLM profile or can run an agent conversation.
 
 > [!IMPORTANT]
 > On macOS 15.6.1, both launchd services ran and authenticated REST worked locally and via
 > the Mac's private LAN address. The application firewall was off; a client on a second
-> machine, enabled-firewall behavior, and Enterprise sandbox egress have **not** been tested.
-> Verify those paths in your own network before relying on this installation for Enterprise.
+> machine, enabled-firewall behavior, and the sandbox-to-Mac **Agent Server** path have not
+> been tested. Separately, a fixed-response loopback test server behind an ngrok endpoint
+> with Basic Auth did return its expected response from an `app.all-hands.dev` sandbox. That
+> proves ngrok egress, **not** this Agent Server or its session-key authentication. Verify
+> the actual route before relying on it.
 
 ## Give the Mac an LLM and Secrets
 
@@ -262,8 +342,13 @@ sequenceDiagram
   conversation's scope.
 
 Start a new conversation with the plugin loaded, as in the previous section, and ask the agent
-to give the Mac an LLM. Its steps are these commands, run from the plugin's skill directory. The
-key and certificate names must appear in the command so the sandbox injects them:
+to give the Mac an LLM. The [LLM setup skill](./skills/macos-agent-server-llm-setup/SKILL.md)
+provides its instructions; the equivalent commands below run from the plugin's skill
+directory. The key names must appear in the command so the sandbox injects them.
+
+<!-- docs:tabs -->
+
+### Private network (Mac TLS front end)
 
 ```bash
 python3 scripts/sync_llm.py --target https://mac.internal.example:18443 \
@@ -275,7 +360,24 @@ python3 scripts/sync_llm.py --target https://mac.internal.example:18443 \
   --model claude-sonnet-4-5 --secret GITHUB_TOKEN --dry-run
 ```
 
-Run the second command without `--dry-run` to apply it. It prints the steps, never a value:
+### Temporary ngrok demo
+
+Use the HTTPS ngrok hostname. The script verifies its public certificate with the standard
+trust store; do **not** pass `--ca-cert-env` or `--allow-insecure-http`:
+
+```bash
+python3 scripts/sync_llm.py --target https://YOUR_NGROK_HOSTNAME \
+  --api-key-env OPENHANDS_API_KEY --target-key-env MAC_AGENT_SERVER_KEY \
+  --list-models
+python3 scripts/sync_llm.py --target https://YOUR_NGROK_HOSTNAME \
+  --api-key-env OPENHANDS_API_KEY --target-key-env MAC_AGENT_SERVER_KEY \
+  --model claude-sonnet-4-5 --secret GITHUB_TOKEN --dry-run
+```
+
+<!-- /docs:tabs -->
+
+Run the second command for your chosen route without `--dry-run` to apply it. It prints the
+steps, never a value (example from the private-network route):
 
 ```text
 ok   LLM key export is allowed
@@ -287,12 +389,12 @@ ok   LLM profile 'enterprise' saved and active on the Mac
 ```
 
 The Mac checks the key before anything is saved, so a bad key or unreachable proxy changes
-nothing. The script verifies the Mac's certificate against `MAC_AGENT_SERVER_CA` only, and it
-refuses a plain `http://` target unless you pass `--allow-insecure-http`, which you should not
-need. If you refresh your key in Settings, or the installation resets its LLM proxy database,
-the Mac's copy stops working. Run the script with `--check` to find out, and run it again
-without `--check` to fix it. Pass `--enterprise-url` or `--llm-base-url` if the installation
-uses custom hostnames.
+nothing. For the private-network route the script pins `MAC_AGENT_SERVER_CA`; for ngrok it
+uses the standard public CA trust store. It refuses a plain `http://` target unless you pass
+`--allow-insecure-http`, which you should not need. If you refresh your key in Settings, or
+the installation resets its LLM proxy database, the Mac's copy stops working. Run the script
+with `--check` to find out, and run it again without `--check` to fix it. Pass
+`--enterprise-url` or `--llm-base-url` if the installation uses custom hostnames.
 
 > [!IMPORTANT]
 > The script's tests use local stand-ins. It has also run end to end against OpenHands Cloud
@@ -312,11 +414,13 @@ ssh "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && ./oh-agent-
 ssh -t "$MAC_SSH" 'cd "$HOME/enterprise-cookbook/macos-agent-canvas" && ./oh-agent-server.sh restart'
 ```
 
-`start`, `stop`, and `restart` act on both services. `start` re-enables startup at boot, `stop`
-disables it until a later `start`, and `restart` preserves the key. `logs` shows the Agent
-Server's log and `logs --tls` the TLS front end's. `remove --purge` destroys the installation,
-certificate, and conversations; it is not routine management. `key` displays the credential, so
-use it only in a private operator terminal. The default directory is the service user's
+`start`, `stop`, and `restart` act on the installed launchd service(s), **not** ngrok. `start`
+re-enables startup at boot, `stop` disables it until a later `start`, and `restart` preserves
+the key. `logs` shows the Agent Server's log; `logs --tls` is only for the Mac TLS front end.
+In the demo route the operator manages ngrok separately and must stop it when testing ends.
+`remove --purge` destroys the installation, any certificate, and conversations; it is not
+routine management. `key` displays the credential, so use it only in a private operator
+terminal. The default directory is the service user's
 `~/.openhands-enterprise-mac-agent` (virtual environment, logs, data, `tls/`,
 `config.env`). The launchd wrapper sets `OH_PERSISTENCE_DIR` to this directory's `state/`
 for profiles, settings, and secrets; it also keeps conversations, the default workspace,

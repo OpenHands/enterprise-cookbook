@@ -1,15 +1,16 @@
 ---
 name: macos-agent-server-install
-description: This skill should be used when the user asks to "install Agent Server on my Mac", "set up macOS for Enterprise REST access", or "save the Mac session key in Enterprise". Guides an operator-run SSH installation behind a TLS front end, and the one-time handoff of the session key and certificate through Enterprise Secrets.
+description: This skill should be used when the user asks to "install Agent Server on my Mac", "set up macOS for Enterprise REST access", or "save the Mac session key in Enterprise". Guides operator-run SSH installation with private-network TLS or a temporary ngrok demo, and the session key handoff through Enterprise Secrets.
 ---
 
 # Install a macOS Agent Server for Enterprise REST Access
 
 Follow [the recipe](../../README.md) for commands and prerequisites. The **operator**, not the
-Enterprise agent, SSHs into the Mac, authorizes sudo, runs the installer, and pastes the generated
-session key and certificate into Enterprise `Settings > Secrets`. Do not request an SSH private key
-or sudo password for an agent conversation. The agent later calls the Mac's REST API over HTTPS
-from its Enterprise sandbox; no Enterprise SSH access is needed.
+Enterprise agent, SSHs into the Mac, authorizes sudo, runs the installer, and saves the
+generated session key in Enterprise `Settings > Secrets` (and the Mac certificate for the
+private-network route). Do not request an SSH private key or sudo password for an agent
+conversation. The agent later calls the Mac's REST API over HTTPS from its Enterprise sandbox;
+no Enterprise SSH access is needed.
 
 ## Before Installation
 
@@ -17,41 +18,46 @@ from its Enterprise sandbox; no Enterprise SSH access is needed.
    a service account. A dedicated non-admin account needs a home and `uv` accessible before
    `--user ACCOUNT` is used. The Mac's agent-server runs tools as that account without
    container isolation.
-2. Ask which **host name or IP address Enterprise sandboxes use to reach the Mac**. The installer
-   issues its certificate for that name (`--tls-name`), and clients refuse any other name. Confirm
-   it resolves from the intended sandboxes, and that the customer firewall allows TCP `18443`
-   (the TLS port) only from them. `--allow-from CIDR` adds a second limit inside the Mac. SSH
+2. Ask which HTTPS route the operator wants. For the private-network route, get the Mac host
+   name/IP the sandboxes can reach, use `--tls-name NAME`, and limit the firewall's TCP `18443`
+   access to the sandbox network; `--allow-from CIDR` adds a second restriction. For a temporary
+   ngrok demo, confirm an available hostname and an authenticated ngrok agent on the Mac. SSH
    reachability from the operator's workstation is not proof of REST reachability from Enterprise.
-3. Explain what the protection covers. The Agent Server listens only on `127.0.0.1`; a TLS front
-   end on the Mac's network port encrypts traffic, and the sandbox trusts only that Mac's
-   certificate. Anyone with the session key can still run commands as the service user, so the
-   firewall, `--allow-from`, and a dedicated account matter.
-4. Ask whether the Enterprise secrets should be personal or organization-shared. Shared secrets
+3. Explain what the protection covers. The Agent Server stays on `127.0.0.1` in both routes;
+   private-network clients pin the Mac certificate, while ngrok terminates public HTTPS and
+   forwards over loopback. Anyone with the session key can run commands as the service user;
+   the ngrok route exposes a public API, so disable request inspection and stop the tunnel
+   after the demo. The private route should use the firewall and `--allow-from`; a dedicated
+   service account is useful in either route.
+4. Ask whether Enterprise secrets should be personal or organization-shared. Shared secrets
    reach every member's agent runtime in the organization and require Admin/Owner rights to
-   create. Check for preexisting `MAC_AGENT_SERVER_KEY` and `MAC_AGENT_SERVER_CA` secrets before
-   installation; do not replace one accidentally.
+   create. Check for an existing `MAC_AGENT_SERVER_KEY` (and `MAC_AGENT_SERVER_CA` for the
+   private route) before installation; do not replace one accidentally.
 
 ## Operator Steps
 
-1. Have the operator run the cookbook's clone/install command **in their own Mac SSH shell**, as
-   a non-root Mac administrator with sudo authorization, with `--tls-name NAME`. The installer
-   generates both keys and the certificate, registers two launchd services, and checks both; it
-   does not print the key on install. If there is an existing checkout, inspect its changes and
-   update deliberately before reinstalling.
+1. Have the operator clone/install **in their own Mac SSH shell**, as a non-root Mac
+   administrator with sudo authorization: `install --tls-name NAME` for the private-network
+   route or `install --no-tls --host 127.0.0.1` for ngrok. The installer generates both keys
+   and (for the private route) the certificate, registers the appropriate launchd service(s),
+   and never prints the session key on install. The operator separately starts ngrok with
+   `--inspect=false` and an available HTTPS hostname for the demo. If there is an existing
+   checkout, inspect its changes and update deliberately before reinstalling.
 2. Have the operator run `./oh-agent-server.sh key` **in that same private terminal**, copy the
    displayed value into Enterprise `Settings > Secrets` as `MAC_AGENT_SERVER_KEY`, and choose
    the intended scope. Avoid screen sharing, terminal recording, clipboard sync, chat, command
    arguments, and workspace files while handling the value. Clear the clipboard and terminal
    scrollback afterward. Do not retrieve, print, or ask for the key in an agent conversation.
-3. Have the operator run `./oh-agent-server.sh ca` and save its one-line output as
-   `MAC_AGENT_SERVER_CA` with the same scope. It is a public certificate, so it is safe to show.
-4. Start a new Enterprise conversation with access to both secrets. Verify authenticated
-   `GET /api/settings` from **its sandbox** over HTTPS, with an `X-Session-API-Key` header
-   referencing `$MAC_AGENT_SERVER_KEY` and `curl --cacert` fed from `$MAC_AGENT_SERVER_CA`,
-   suppressing the response body. A Mac-local `/ready` succeeds without authentication and
-   cannot prove this path works. If the check fails, investigate the host name against the
-   certificate, the firewall and `--allow-from`, sandbox egress, secret scope, and Agent Profile
-   selection without asking the operator to reveal the key.
+3. For the private-network route only, have the operator run `./oh-agent-server.sh ca` and save
+   its one-line output as `MAC_AGENT_SERVER_CA` with the same scope. It is a public certificate.
+4. Start a new Enterprise conversation with access to the required secret(s). Verify
+   authenticated `GET /api/settings` from **its sandbox** over HTTPS, with an
+   `X-Session-API-Key` header referencing `$MAC_AGENT_SERVER_KEY`, suppressing the response
+   body. For the private-network route, pin `$MAC_AGENT_SERVER_CA` with `curl --cacert`;
+   for ngrok, use normal public-CA verification without `--cacert`. A Mac-local `/ready`
+   succeeds without authentication and cannot prove this path works. If the check fails,
+   investigate the hostname, network/endpoint reachability, certificate trust, secret scope,
+   and Agent Profile selection without asking the operator to reveal the key.
 
 ## Boundaries
 
