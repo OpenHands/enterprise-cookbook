@@ -235,9 +235,10 @@ again without `--check` to fix it. Pass `--enterprise-url` or `--llm-base-url` i
 installation uses custom hostnames.
 
 > [!IMPORTANT]
-> This script has been tested only against local stand-ins for Enterprise, the LLM proxy, and the
-> Mac Agent Server. Run it once against a real installation with LLM key export turned on before
-> relying on it.
+> The script's tests use local stand-ins. It has also run end to end against OpenHands Cloud
+> (LLM key export, the public LLM proxy) and a real Agent Server on localhost. It has not run
+> against a Replicated VM installation or a Mac. Run it once there, with LLM key export turned
+> on, before relying on it.
 
 ## Manage the Service
 
