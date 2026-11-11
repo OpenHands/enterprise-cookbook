@@ -7,10 +7,15 @@ saves an LLM profile and the named secrets on the remote Agent Server (for
 example the Mac from this recipe). Secret values come from the sandbox
 environment and are never printed.
 
-    sync_llm.py --target https://mac.example.net:18100 --list-models
-    sync_llm.py --target https://mac.example.net:18100 --model claude-sonnet-4-5 \\
+    sync_llm.py --target https://mac.example.net:18443 --list-models
+    sync_llm.py --target https://mac.example.net:18443 --model claude-sonnet-4-5 \\
         --secret GITHUB_TOKEN
-    sync_llm.py --target https://mac.example.net:18100 --check
+    sync_llm.py --target https://mac.example.net:18443 --check
+
+With a self-signed certificate on the Agent Server, pass --ca-cert-env NAME, where
+$NAME holds the certificate, as PEM or as one line of base64 (the form that
+oh-agent-server.sh ca prints). The script then trusts only that certificate for the
+Agent Server.
 
 Python 3.10 or later, standard library only.
 """
@@ -18,9 +23,12 @@ Python 3.10 or later, standard library only.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.error
 import urllib.parse
@@ -33,6 +41,7 @@ WEBHOOKS_SUFFIX = "/api/v1/webhooks"
 WEBHOOKS_ENV = "OH_WEBHOOKS_0_BASE_URL"
 DEFAULT_API_KEY_ENV = "OPENHANDS_API_KEY"
 DEFAULT_TARGET_KEY_ENV = "MAC_AGENT_SERVER_KEY"
+DEFAULT_CA_CERT_ENV = "MAC_AGENT_SERVER_CA"
 DEFAULT_PROFILE = "enterprise"
 PROXY_PREFIX = "litellm_proxy/"
 OLD_PREFIXES = ("openhands/", PROXY_PREFIX)
@@ -78,6 +87,7 @@ def call(
     *,
     headers: Mapping[str, str] | None = None,
     body: Any = None,
+    context: ssl.SSLContext | None = None,
 ) -> tuple[int, Any]:
     data = json.dumps(body).encode() if body is not None else None
     request_headers = {"Accept": "application/json", **(headers or {})}
@@ -87,13 +97,23 @@ def call(
         url, data=data, method=method, headers=request_headers
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(
+            request, timeout=TIMEOUT_SECONDS, context=context
+        ) as response:
             status, raw = response.status, response.read()
     except urllib.error.HTTPError as error:
         status, raw = error.code, error.read()
     except (urllib.error.URLError, OSError) as error:
         host = urllib.parse.urlsplit(url).netloc
         reason = getattr(error, "reason", error)
+        if isinstance(reason, ssl.SSLCertVerificationError):
+            raise SyncError(
+                f"{host} presented a certificate that was not accepted "
+                f"({scrub(str(reason.verify_message))}). Check that the CA "
+                "certificate secret is the current one (run 'oh-agent-server.sh ca' "
+                "on the Mac) and that the target host name is one the certificate "
+                "was issued for."
+            ) from None
         raise SyncError(f"cannot reach {host}: {scrub(str(reason))}") from None
     try:
         return status, json.loads(raw) if raw else None
@@ -204,9 +224,12 @@ def list_models(proxy: str, key: str) -> list[str]:
 
 
 class AgentServer:
-    def __init__(self, url: str, session_key: str) -> None:
+    def __init__(
+        self, url: str, session_key: str, context: ssl.SSLContext | None
+    ) -> None:
         self.url = url
         self.headers = {"X-Session-API-Key": session_key}
+        self.context = context
 
     def call(
         self,
@@ -216,7 +239,9 @@ class AgentServer:
         extra_headers: Mapping[str, str] | None = None,
     ) -> tuple[int, Any]:
         headers = {**self.headers, **(extra_headers or {})}
-        status, payload = call(method, self.url + path, headers=headers, body=body)
+        status, payload = call(
+            method, self.url + path, headers=headers, body=body, context=self.context
+        )
         if status in (401, 403):
             raise SyncError(
                 f"the Agent Server rejected the session key (HTTP {status}). Check "
@@ -251,6 +276,12 @@ def read_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV)
     parser.add_argument("--target-key-env", default=DEFAULT_TARGET_KEY_ENV)
+    parser.add_argument(
+        "--ca-cert-env",
+        metavar="NAME",
+        help="env var holding the Agent Server's certificate (PEM) to trust; "
+        f"for example {DEFAULT_CA_CERT_ENV}",
+    )
     parser.add_argument("--model", help="proxy model route to use (see --list-models)")
     parser.add_argument("--profile-name", default=DEFAULT_PROFILE)
     parser.add_argument("--secret", action="append", default=[], metavar="NAME")
@@ -263,6 +294,34 @@ def read_args(argv: Sequence[str] | None) -> argparse.Namespace:
     mode.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-insecure-http", action="store_true")
     return parser.parse_args(argv)
+
+
+def decode_certificate(value: str) -> str:
+    """Accept the PEM text, or the one-line base64 form that Secrets can hold."""
+    if "BEGIN CERTIFICATE" in value:
+        return value
+    try:
+        return base64.b64decode(value.strip(), validate=True).decode()
+    except (binascii.Error, UnicodeDecodeError):
+        return ""
+
+
+def trust_context(
+    args: argparse.Namespace, env: Mapping[str, str], target: str
+) -> ssl.SSLContext | None:
+    if not args.ca_cert_env:
+        return None
+    if not target.startswith("https://"):
+        raise UsageError("--ca-cert-env only applies to an https:// target")
+    pem = decode_certificate(env.get(args.ca_cert_env, ""))
+    if "BEGIN CERTIFICATE" not in pem:
+        raise UsageError(
+            f"${args.ca_cert_env} is not set, or does not hold a PEM certificate"
+        )
+    try:
+        return ssl.create_default_context(cadata=pem)
+    except ssl.SSLError as error:
+        raise UsageError(f"${args.ca_cert_env} is not a valid certificate: {error}")
 
 
 def read_inputs(args: argparse.Namespace, env: Mapping[str, str]) -> dict[str, Any]:
@@ -283,6 +342,7 @@ def read_inputs(args: argparse.Namespace, env: Mapping[str, str]) -> dict[str, A
         inputs["target"] = require_https(
             args.target, "Agent Server URL", args.allow_insecure_http
         )
+        inputs["context"] = trust_context(args, env, inputs["target"])
     if not (args.list_models or args.check or args.dry_run) and not args.model:
         raise UsageError("--model is required (run with --list-models to see them)")
 
@@ -322,7 +382,7 @@ def run(args: argparse.Namespace, env: Mapping[str, str]) -> int:
             say(f"     {model}")
         return 0
 
-    mac = AgentServer(inputs["target"], inputs["session_key"])
+    mac = AgentServer(inputs["target"], inputs["session_key"], inputs["context"])
     status, payload = mac.call("GET", "/api/profiles")
     mac.expect(status, payload, "reaching the Mac")
     say(f"ok   Mac Agent Server reachable at {mac.url}")

@@ -15,6 +15,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "boto3>=1.35,<2",
+    "cryptography>=43",
     "pre-commit>=4.0.0",
     "pyright>=1.1.390",
     "pytest>=8.0.0",

@@ -5,8 +5,10 @@ Server. The script talks to them over real HTTP, so every code path runs. No
 credentials or network access are needed.
 """
 
+import base64
 import importlib.util
 import json
+import ssl
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,6 +30,14 @@ sync_llm = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = sync_llm
 spec.loader.exec_module(sync_llm)
 
+tls_spec = importlib.util.spec_from_file_location(
+    "tls_front", Path(__file__).parents[1] / "tls_front.py"
+)
+assert tls_spec is not None and tls_spec.loader is not None
+tls_front = importlib.util.module_from_spec(tls_spec)
+sys.modules[tls_spec.name] = tls_front
+tls_spec.loader.exec_module(tls_front)
+
 API_KEY = "sk-oh-TESTAPIKEY0001"
 SESSION = "SESSIONKEY-0123456789abcdef-0123456789abcdef"
 LLM_KEY = "sk-litellm-BYORKEY0002"
@@ -38,7 +48,7 @@ MODELS = ["claude-sonnet-4-5", "gpt-5"]
 class Fake:
     """A local HTTP server whose routes are a function of (method, path, ctx)."""
 
-    def __init__(self, route):
+    def __init__(self, route, cert_dir=None):
         self.requests = []
         self.state = {}
         fake = self
@@ -64,7 +74,16 @@ class Fake:
             do_GET = do_POST = do_PUT = handle_any
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        port = self.server.server_address[1]
+        if cert_dir is None:
+            self.url = f"http://127.0.0.1:{port}"
+        else:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert_dir / "cert.pem", cert_dir / "key.pem")
+            self.server.socket = context.wrap_socket(
+                self.server.socket, server_side=True
+            )
+            self.url = f"https://localhost:{port}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def paths(self, method=None):
@@ -314,3 +333,100 @@ def test_proxy_url_needs_a_flag_for_a_custom_app_hostname():
     args = sync_llm.read_args(["--target", "https://mac"])
     with pytest.raises(sync_llm.UsageError, match="--llm-base-url"):
         sync_llm.proxy_url(args, "https://openhands.example.com")
+
+
+@pytest.fixture
+def tls_world(world, tmp_path):
+    enterprise, proxy, mac, env, args = world
+    cert_dir = tmp_path / "tls"
+    cert_path, _ = tls_front.generate_cert("mac.test.example", cert_dir)
+    secure_mac = Fake(mac_route, cert_dir)
+    env = {**env, "MAC_AGENT_SERVER_CA": cert_path.read_text()}
+    args = [
+        "--target",
+        secure_mac.url,
+        "--llm-base-url",
+        proxy.url,
+        "--allow-insecure-http",
+    ]
+    yield enterprise, proxy, secure_mac, env, args, tmp_path
+    secure_mac.close()
+
+
+def test_sync_over_tls_trusts_only_the_pinned_certificate(tls_world, capsys):
+    _, _, mac, env, args, _ = tls_world
+
+    code = run([*args, "--ca-cert-env", "MAC_AGENT_SERVER_CA", "--model", "gpt-5"], env)
+
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert mac.state["active"] == "enterprise"
+    assert mac.state["profiles"]["enterprise"]["api_key"] == LLM_KEY
+    assert LLM_KEY not in out and SESSION not in out
+
+
+def test_check_works_over_tls(tls_world, capsys):
+    _, _, _, env, args, _ = tls_world
+    tls_args = [*args, "--ca-cert-env", "MAC_AGENT_SERVER_CA"]
+    assert run([*tls_args, "--model", "gpt-5"], env) == 0
+    capsys.readouterr()
+
+    assert run([*tls_args, "--check"], env) == 0
+    assert "holds the current LLM key" in capsys.readouterr().out
+
+
+def test_a_different_certificate_is_refused_and_nothing_is_saved(tls_world, capsys):
+    _, _, mac, env, args, tmp_path = tls_world
+    other, _ = tls_front.generate_cert("other.example", tmp_path / "other")
+    env["MAC_AGENT_SERVER_CA"] = other.read_text()
+
+    code = run([*args, "--ca-cert-env", "MAC_AGENT_SERVER_CA", "--model", "gpt-5"], env)
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "certificate that was not accepted" in out and "oh-agent-server.sh ca" in out
+    assert mac.requests == [] and "profiles" not in mac.state
+
+
+def test_an_untrusted_certificate_is_refused_without_a_ca_secret(tls_world, capsys):
+    _, _, mac, env, args, _ = tls_world
+
+    code = run([*args, "--model", "gpt-5"], env)
+
+    assert code == 1
+    assert "certificate that was not accepted" in capsys.readouterr().out
+    assert "profiles" not in mac.state
+
+
+@pytest.mark.parametrize("value", ["", "not a certificate"])
+def test_a_missing_or_invalid_ca_secret_is_a_usage_error(tls_world, capsys, value):
+    enterprise, _, mac, env, args, _ = tls_world
+    env["MAC_AGENT_SERVER_CA"] = value
+
+    code = run([*args, "--ca-cert-env", "MAC_AGENT_SERVER_CA", "--model", "gpt-5"], env)
+
+    assert code == 2
+    assert "does not hold a PEM certificate" in capsys.readouterr().out
+    assert enterprise.requests == [] and mac.requests == []
+
+
+def test_ca_cert_env_only_applies_to_https_targets(world, capsys):
+    _, _, _, env, args = world
+    env["MAC_AGENT_SERVER_CA"] = "-----BEGIN CERTIFICATE-----"
+
+    code = run([*args, "--ca-cert-env", "MAC_AGENT_SERVER_CA", "--model", "gpt-5"], env)
+
+    assert code == 2
+    assert "only applies to an https:// target" in capsys.readouterr().out
+
+
+def test_the_certificate_may_be_one_line_of_base64(tls_world, capsys):
+    _, _, mac, env, args, _ = tls_world
+    env["MAC_AGENT_SERVER_CA"] = base64.b64encode(
+        env["MAC_AGENT_SERVER_CA"].encode()
+    ).decode()
+
+    code = run([*args, "--ca-cert-env", "MAC_AGENT_SERVER_CA", "--model", "gpt-5"], env)
+
+    assert code == 0, capsys.readouterr().out
+    assert mac.state["active"] == "enterprise"

@@ -4,6 +4,8 @@
 #   - starts at boot, before anyone logs in
 #   - runs as the installing user, or the account selected with --user
 #   - listens on port 18100 by default
+#   - optionally puts a TLS front end (tls_front.py) on another port, with the
+#     Agent Server itself bound to 127.0.0.1 (install --tls-name NAME)
 #
 # Run this script as your normal user. It uses sudo for launchd and, when
 # --user selects another account, for that account's install files.
@@ -17,6 +19,14 @@ if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then export -n OHAS_SESSION_API_KEY; fi
 
 LABEL="dev.openhands.agent-server"
 PLIST="/Library/LaunchDaemons/${LABEL}.plist"
+TLS_LABEL="dev.openhands.agent-server-tls"
+TLS_PLIST="/Library/LaunchDaemons/${TLS_LABEL}.plist"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Empty means no TLS front end. config.env overrides these when it sets them.
+OHAS_TLS_NAME=""
+OHAS_TLS_PORT=""
+OHAS_TLS_ALLOW_FROM=""
 
 SERVICE_USER="$(id -un)"
 SERVICE_GROUP="$(id -gn)"
@@ -30,13 +40,17 @@ set_root() {
   LOGS="$ROOT/logs"
   CONFIG="$ROOT/config.env"
   WRAPPER="$ROOT/run-server.sh"
+  TLS_DIR="$ROOT/tls"
+  TLS_SCRIPT="$ROOT/tls_front.py"
+  TLS_WRAPPER="$ROOT/run-tls-front.sh"
 }
 set_root "${OHAS_HOME:-$HOME/.openhands-agent-server}"
 
 DEFAULT_PORT=18100
 DEFAULT_HOST=0.0.0.0
+DEFAULT_TLS_PORT=18443
 GIT_URL="https://github.com/OpenHands/software-agent-sdk"
-PACKAGES="openhands-sdk openhands-tools openhands-workspace openhands-agent-server"
+PACKAGES="openhands-sdk openhands-tools openhands-workspace openhands-agent-server cryptography"
 
 die()  { echo "error: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
@@ -47,7 +61,13 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
   install [--port N] [--host H] [--ref GIT_REF] [--user USER]
+          [--tls-name NAME [--tls-port N] [--allow-from CIDR[,CIDR...]] | --no-tls]
                   Install agent-server into $ROOT and register the service.
+                  --tls-name NAME binds the Agent Server to 127.0.0.1 and serves
+                  it over HTTPS on --tls-port (default $DEFAULT_TLS_PORT) with a
+                  self-signed certificate for NAME, the host name or IP address
+                  that clients use to reach this Mac. --allow-from limits which
+                  source networks may connect. --no-tls removes the TLS front end.
                   --user runs it as USER (default: existing service user,
                   or your account on a first install).
                   Re-running upgrades the packages and keeps your keys unless
@@ -62,7 +82,14 @@ Commands:
                   you run 'start' again.
   restart         Restart the service.
   status          Show install state, launchd state, PID and /health result.
-  logs [-f]       Show the last log lines (-f to follow).
+  logs [-f] [--tls]
+                  Show the last log lines (-f to follow). --tls shows the TLS
+                  front end's log instead of the Agent Server's.
+  ca [--pem] [--copy]
+                  Display the TLS certificate that clients must trust, as the one
+                  line of base64 that Enterprise Secrets accepts (--pem shows the
+                  PEM text instead), or copy it to this Mac's clipboard (needs
+                  install --tls-name).
   key [--copy] [--reset [--defer-restart|--unattended]]
                   Display the X-Session-API-Key, or copy it to the clipboard.
                   --reset replaces the key without displaying it and restarts
@@ -116,6 +143,8 @@ select_installed_service() {
 
 installed() { [ -f "$PLIST" ] && as_service_user test -f "$CONFIG"; }
 loaded()    { sudo launchctl print "system/$LABEL" >/dev/null 2>&1; }
+tls_loaded() { sudo launchctl print "system/$TLS_LABEL" >/dev/null 2>&1; }
+tls_enabled() { [ -n "$OHAS_TLS_NAME" ]; }
 require_installed() { installed || die "not installed; run: $0 install"; }
 
 load_config() {
@@ -136,6 +165,9 @@ load_config() {
       OH_SESSION_API_KEYS_0=*) OH_SESSION_API_KEYS_0="$value" ;;
       OH_SECRET_KEY=*) OH_SECRET_KEY="$value" ;;
       OHAS_PATH=*) OHAS_PATH="$value" ;;
+      OHAS_TLS_NAME=*) OHAS_TLS_NAME="$value" ;;
+      OHAS_TLS_PORT=*) OHAS_TLS_PORT="$value" ;;
+      OHAS_TLS_ALLOW_FROM=*) OHAS_TLS_ALLOW_FROM="$value" ;;
     esac
   done <<< "$contents"
   [ -n "${OH_SESSION_API_KEYS_0:-}" ] || die "missing session API key in $CONFIG"
@@ -178,7 +210,19 @@ show_network_urls() {
 show_server_summary() {
   local host="$OHAS_HOST"
   [ "$host" = "0.0.0.0" ] && host=localhost
-  cat <<EOF
+  if tls_enabled; then
+    cat <<EOF
+
+  Agent Server: https://$OHAS_TLS_NAME:$OHAS_TLS_PORT (TLS front end)
+  Plain HTTP:   http://$OHAS_HOST:$OHAS_PORT (this Mac only)
+  Certificate:  $(tls_cert_summary)
+  Allowed from: ${OHAS_TLS_ALLOW_FROM:-any source address}
+  Runs as: $SERVICE_USER (home: $SERVICE_HOME)
+  Stores files in: $ROOT
+  Starts at boot
+EOF
+  else
+    cat <<EOF
 
   Agent Server: http://$host:$OHAS_PORT
   Listening on: $OHAS_HOST:$OHAS_PORT
@@ -186,7 +230,8 @@ show_server_summary() {
   Stores files in: $ROOT
   Starts at boot
 EOF
-  [ "$OHAS_HOST" != "0.0.0.0" ] || show_network_urls
+    [ "$OHAS_HOST" != "0.0.0.0" ] || show_network_urls
+  fi
   cat <<EOF
 
   Routes:
@@ -203,11 +248,31 @@ EOF
 
   Commands:
     $0 status | start | stop | restart
-    $0 logs [-f]
+    $0 logs [-f] [--tls]
     $0 key [--copy] [--reset [--defer-restart|--unattended]]
+    $0 ca [--pem] [--copy]
     $0 install [--port N] [--host H] [--ref GIT_REF] [--user USER]
+               [--tls-name NAME [--tls-port N] [--allow-from CIDR[,CIDR...]] | --no-tls]
     $0 remove [--purge] [--yes]
 EOF
+}
+
+tls_ready() {
+  as_service_user curl -fsS --max-time 3 --cacert "$TLS_DIR/cert.pem" \
+    "https://localhost:$OHAS_TLS_PORT/ready" >/dev/null 2>&1
+}
+
+wait_tls_healthy() {
+  local i
+  for i in $(seq 1 30); do
+    tls_ready && return 0
+    sleep 1
+  done
+  return 1
+}
+
+tls_cert_summary() {
+  as_service_user "$VENV/bin/python" "$TLS_SCRIPT" cert-info --cert "$TLS_DIR/cert.pem" 2>/dev/null
 }
 
 wait_healthy() {
@@ -246,6 +311,32 @@ exec "$ROOT/venv/bin/python" -m openhands.agent_server --host "$OHAS_HOST" --por
 EOF
 }
 
+write_tls_wrapper() {
+  cat <<'EOF' | as_service_user /bin/bash -c 'cat >"$1" && chmod 755 "$1"' bash "$TLS_WRAPPER" || die "could not write $TLS_WRAPPER"
+#!/bin/bash
+# Generated by oh-agent-server.sh. launchd runs this as the selected user.
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+set -a
+. "$ROOT/config.env"
+set +a
+set --
+IFS=','
+for net in $OHAS_TLS_ALLOW_FROM; do set -- "$@" --allow-from "$net"; done
+unset IFS
+cd "$ROOT/data" || exit 1
+exec "$ROOT/venv/bin/python" "$ROOT/tls_front.py" serve \
+  --cert "$ROOT/tls/cert.pem" --key "$ROOT/tls/key.pem" \
+  --listen-port "$OHAS_TLS_PORT" --upstream-port "$OHAS_PORT" "$@"
+EOF
+}
+
+prepare_tls() {
+  info "Preparing the TLS front end for $1"
+  as_service_user /bin/bash -c 'cat >"$1" && chmod 644 "$1"' bash "$TLS_SCRIPT" <"$SCRIPT_DIR/tls_front.py" || die "could not write $TLS_SCRIPT"
+  as_service_user "$VENV/bin/python" "$TLS_SCRIPT" gen-cert --name "$1" --dir "$TLS_DIR" --keep-if-valid || die "could not create the TLS certificate"
+  write_tls_wrapper
+}
+
 write_config() {
   local host="$1" port="$2" session_key="$3" secret_key="$4"
   cat <<EOF | as_service_user /bin/bash -c 'umask 077; cat >"$1" && chmod 600 "$1"' bash "$CONFIG" || die "could not write $CONFIG"
@@ -254,6 +345,9 @@ OHAS_PORT='$port'
 OH_SESSION_API_KEYS_0='$session_key'
 OH_SECRET_KEY='$secret_key'
 OHAS_PATH='$SERVICE_PATH'
+OHAS_TLS_NAME='$OHAS_TLS_NAME'
+OHAS_TLS_PORT='$OHAS_TLS_PORT'
+OHAS_TLS_ALLOW_FROM='$OHAS_TLS_ALLOW_FROM'
 EOF
 }
 
@@ -266,8 +360,12 @@ validate_session_key_override() {
 }
 
 warn_if_firewall_blocks() {
-  local sfw=/usr/libexec/ApplicationFirewall/socketfilterfw
-  [ "$OHAS_HOST" = "127.0.0.1" ] && return 0
+  local sfw=/usr/libexec/ApplicationFirewall/socketfilterfw port="$OHAS_PORT"
+  if tls_enabled; then
+    port="$OHAS_TLS_PORT"
+  elif [ "$OHAS_HOST" = "127.0.0.1" ]; then
+    return 0
+  fi
   [ -x "$sfw" ] || return 0
 
   local state py
@@ -279,26 +377,26 @@ warn_if_firewall_blocks() {
 
   py="$(as_service_user "$VENV/bin/python" -c 'import os,sys;print(os.path.realpath(sys.executable))' 2>/dev/null)"
   echo "warning: the macOS application firewall is ON. Incoming connections from other machines" >&2
-  echo "         to port $OHAS_PORT may be blocked, and a boot-time daemon cannot show the approval prompt." >&2
+  echo "         to port $port may be blocked, and a boot-time daemon cannot show the approval prompt." >&2
   echo "         To allow them:" >&2
   echo "           sudo $sfw --add '$py'" >&2
   echo "           sudo $sfw --unblockapp '$py'" >&2
   echo "         Or use System Settings > Network > Firewall > Options." >&2
 }
 
-write_plist() {
-  local tmp
+write_unit() {
+  local label="$1" plist="$2" wrapper="$3" logfile="$4" tmp
   tmp="$(mktemp)"
   cat >"$tmp" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>$LABEL</string>
+  <key>Label</key><string>$label</string>
   <key>UserName</key><string>$SERVICE_USER</string>
   <key>GroupName</key><string>$SERVICE_GROUP</string>
   <key>ProgramArguments</key>
-  <array><string>$WRAPPER</string></array>
+  <array><string>$wrapper</string></array>
   <key>WorkingDirectory</key><string>$DATA</string>
   <key>EnvironmentVariables</key>
   <dict>
@@ -309,41 +407,83 @@ write_plist() {
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
-  <key>StandardOutPath</key><string>$LOGS/agent-server.log</string>
-  <key>StandardErrorPath</key><string>$LOGS/agent-server.log</string>
+  <key>StandardOutPath</key><string>$logfile</string>
+  <key>StandardErrorPath</key><string>$logfile</string>
 </dict>
 </plist>
 EOF
   plutil -lint "$tmp" >/dev/null || { rm -f "$tmp"; die "generated plist is invalid"; }
   PLIST_CHANGED=0
-  if [ ! -f "$PLIST" ] || ! cmp -s "$tmp" "$PLIST"; then
-    sudo install -m 644 -o root -g wheel "$tmp" "$PLIST" || { rm -f "$tmp"; die "could not write $PLIST"; }
+  if [ ! -f "$plist" ] || ! cmp -s "$tmp" "$plist"; then
+    sudo install -m 644 -o root -g wheel "$tmp" "$plist" || { rm -f "$tmp"; die "could not write $plist"; }
     PLIST_CHANGED=1
   fi
   rm -f "$tmp"
 }
 
-bootstrap_service() {
-  local attempt
+write_plist() { write_unit "$LABEL" "$PLIST" "$WRAPPER" "$LOGS/agent-server.log"; }
+
+bootstrap_unit() {
+  local label="$1" plist="$2" attempt
   for attempt in 1 2 3 4 5; do
-    sudo launchctl bootstrap system "$PLIST" && return 0
+    sudo launchctl bootstrap system "$plist" && return 0
     [ "$attempt" -eq 5 ] && break
     sleep 1
   done
-  die "launchctl bootstrap failed; check launchd logs for $LABEL"
+  die "launchctl bootstrap failed; check launchd logs for $label"
+}
+
+bootstrap_service() { bootstrap_unit "$LABEL" "$PLIST"; }
+
+install_tls_unit() {
+  write_unit "$TLS_LABEL" "$TLS_PLIST" "$TLS_WRAPPER" "$LOGS/tls-front.log"
+  if tls_loaded && [ "$PLIST_CHANGED" -eq 0 ]; then
+    sudo launchctl enable "system/$TLS_LABEL" || die "launchctl enable failed for the TLS front end"
+    sudo launchctl kickstart -k "system/$TLS_LABEL" || die "launchctl restart failed for the TLS front end"
+  else
+    if tls_loaded; then
+      sudo launchctl bootout "system/$TLS_LABEL" || die "launchctl bootout failed for the TLS front end"
+    fi
+    sudo launchctl enable "system/$TLS_LABEL" || die "launchctl enable failed for the TLS front end"
+    bootstrap_unit "$TLS_LABEL" "$TLS_PLIST"
+  fi
+}
+
+remove_tls_unit() {
+  if tls_loaded; then
+    sudo launchctl bootout "system/$TLS_LABEL" || die "could not stop $TLS_LABEL; installation left intact"
+  fi
+  sudo launchctl enable "system/$TLS_LABEL" >/dev/null 2>&1 || die "could not reset launchd state for $TLS_LABEL"
+  if [ -f "$TLS_PLIST" ] || [ -L "$TLS_PLIST" ]; then
+    info "Removing $TLS_PLIST"
+    sudo rm -f "$TLS_PLIST" || die "could not remove $TLS_PLIST; installation left intact"
+    [ ! -e "$TLS_PLIST" ] && [ ! -L "$TLS_PLIST" ] || die "could not remove $TLS_PLIST; installation left intact"
+  fi
 }
 
 cmd_install() {
   local port="" host="" ref="" user="" existing_user=""
+  local host_arg tls_name="" tls_port="" allow_from="" no_tls=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --port) port="${2:?--port needs a value}"; shift 2 ;;
       --host) host="${2:?--host needs a value}"; shift 2 ;;
       --ref)  ref="${2:?--ref needs a value}"; shift 2 ;;
       --user) user="${2:?--user needs a value}"; shift 2 ;;
+      --tls-name) tls_name="${2:?--tls-name needs a value}"; shift 2 ;;
+      --tls-port) tls_port="${2:?--tls-port needs a value}"; shift 2 ;;
+      --allow-from) allow_from="${2:?--allow-from needs a value}"; shift 2 ;;
+      --no-tls) no_tls=1; shift ;;
       *) die "unknown option for install: $1" ;;
     esac
   done
+  if [ "$no_tls" -eq 1 ] && { [ -n "$tls_name" ] || [ -n "$tls_port" ] || [ -n "$allow_from" ]; }; then
+    die "--no-tls cannot be combined with --tls-name, --tls-port or --allow-from"
+  fi
+  case "$tls_name" in *[!A-Za-z0-9.:-]*) die "invalid --tls-name: $tls_name" ;; esac
+  case "$tls_port" in *[!0-9]*) die "invalid --tls-port: $tls_port" ;; esac
+  case "$allow_from" in *[!0-9a-fA-F:./,]*) die "invalid --allow-from: $allow_from" ;; esac
+  host_arg="$host"
   if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then validate_session_key_override; fi
 
   if [ -f "$PLIST" ]; then
@@ -374,6 +514,22 @@ cmd_install() {
   host="${host:-$DEFAULT_HOST}"
   port="${port:-$DEFAULT_PORT}"
   case "$port" in ''|*[!0-9]*) die "invalid port: $port" ;; esac
+  if [ "$no_tls" -eq 1 ]; then
+    OHAS_TLS_NAME=""; OHAS_TLS_PORT=""; OHAS_TLS_ALLOW_FROM=""
+    [ "$host" != 127.0.0.1 ] || info "TLS removed; the Agent Server still listens on 127.0.0.1 only (use --host 0.0.0.0 for network access)"
+  else
+    [ -z "$tls_name" ] || OHAS_TLS_NAME="$tls_name"
+    [ -z "$tls_port" ] || OHAS_TLS_PORT="$tls_port"
+    [ -z "$allow_from" ] || OHAS_TLS_ALLOW_FROM="$allow_from"
+  fi
+  if tls_enabled; then
+    case "$host_arg" in ''|127.0.0.1) ;; *) die "with TLS the Agent Server must listen on 127.0.0.1; drop --host, or use --no-tls" ;; esac
+    host=127.0.0.1
+    OHAS_TLS_PORT="${OHAS_TLS_PORT:-$DEFAULT_TLS_PORT}"
+    [ "$OHAS_TLS_PORT" != "$port" ] || die "--tls-port must differ from --port"
+  elif [ -n "$tls_port$allow_from" ]; then
+    die "--tls-port and --allow-from need --tls-name"
+  fi
   if [ "${OHAS_SESSION_API_KEY+x}" = x ]; then session_key="$OHAS_SESSION_API_KEY"; fi
   [ -n "$session_key" ] || session_key="$(openssl rand -hex 32)"
   [ -n "$secret_key" ]  || secret_key="$(openssl rand -hex 32)"
@@ -405,6 +561,7 @@ cmd_install() {
 
   write_config "$host" "$port" "$session_key" "$secret_key"
   write_wrapper
+  ! tls_enabled || prepare_tls "$OHAS_TLS_NAME"
 
   info "Checking $PLIST (sudo required if changed)"
   write_plist
@@ -428,9 +585,23 @@ cmd_install() {
   else
     echo "warning: service did not become healthy within 60s; check: $0 logs" >&2
   fi
+  if tls_enabled; then
+    info "Starting the TLS front end"
+    install_tls_unit
+    wait_tls_healthy || echo "warning: the TLS front end did not answer within 30s; check: $0 logs" >&2
+  elif [ -f "$TLS_PLIST" ]; then
+    info "Removing the TLS front end"
+    remove_tls_unit
+  fi
   show_server_summary
   echo
   echo
+  if tls_enabled; then
+    echo "  Save these in Enterprise (Settings > Secrets). Each prints as one line:"
+    echo "    MAC_AGENT_SERVER_KEY   $0 key   (secret: show it only in a private terminal)"
+    echo "    MAC_AGENT_SERVER_CA    $0 ca    (public certificate, base64)"
+    echo
+  fi
   echo "  Session API key:"
   echo "    Copy without displaying:   $0 key --copy"
   echo "    Display in terminal:       $0 key"
@@ -441,7 +612,11 @@ cmd_install() {
   echo >&2
   echo >&2
   printf 'WARNING: Anyone who can reach this server and has the X-Session-API-Key can execute arbitrary shell commands as %s.\n' "$SERVICE_USER" >&2
-  echo '         Keep the key secret; use --host 127.0.0.1 for local-only access.' >&2
+  if tls_enabled; then
+    echo "         Keep the key secret, and open only port $OHAS_TLS_PORT to the network that needs it." >&2
+  else
+    echo '         Keep the key secret; use --host 127.0.0.1 for local-only access.' >&2
+  fi
 }
 
 cmd_start() {
@@ -451,16 +626,32 @@ cmd_start() {
   if loaded; then
     sudo launchctl kickstart "system/$LABEL" || die "start failed"
   else
-    sudo launchctl bootstrap system "$PLIST" || die "launchctl bootstrap failed"
+    bootstrap_service
   fi
   info "Waiting for $(health_url)"
   wait_healthy || die "started but not healthy after 60s; check: $0 logs"
+  if tls_enabled; then
+    sudo launchctl enable "system/$TLS_LABEL"
+    if tls_loaded; then
+      sudo launchctl kickstart "system/$TLS_LABEL" || die "TLS front end start failed"
+    else
+      bootstrap_unit "$TLS_LABEL" "$TLS_PLIST"
+    fi
+    wait_tls_healthy || die "TLS front end started but not answering after 30s; check: $0 logs"
+  fi
   info "Started"
   show_server_summary
 }
 
 cmd_stop() {
   require_installed
+  load_config
+  if tls_enabled; then
+    sudo launchctl disable "system/$TLS_LABEL"
+    if tls_loaded; then
+      sudo launchctl bootout "system/$TLS_LABEL" || die "stop failed for the TLS front end"
+    fi
+  fi
   sudo launchctl disable "system/$LABEL"
   if loaded; then
     sudo launchctl bootout "system/$LABEL" || die "stop failed"
@@ -475,10 +666,19 @@ cmd_restart() {
   if loaded; then
     sudo launchctl kickstart -k "system/$LABEL" || die "restart failed"
   else
-    sudo launchctl bootstrap system "$PLIST" || die "launchctl bootstrap failed"
+    bootstrap_service
   fi
   info "Waiting for $(health_url)"
   wait_healthy || die "restarted but not healthy after 60s; check: $0 logs"
+  if tls_enabled; then
+    sudo launchctl enable "system/$TLS_LABEL"
+    if tls_loaded; then
+      sudo launchctl kickstart -k "system/$TLS_LABEL" || die "TLS front end restart failed"
+    else
+      bootstrap_unit "$TLS_LABEL" "$TLS_PLIST"
+    fi
+    wait_tls_healthy || die "TLS front end restarted but not answering after 30s; check: $0 logs"
+  fi
   info "Restarted"
   show_server_summary
 }
@@ -510,6 +710,10 @@ cmd_remove() {
   fi
 
   sudo -v || die "sudo authorization required to remove the service"
+  if tls_loaded || [ -f "$TLS_PLIST" ]; then
+    info "Removing the TLS front end"
+    remove_tls_unit
+  fi
   if loaded; then
     info "Stopping service"
     sudo launchctl bootout "system/$LABEL" || die "could not stop $LABEL; installation left intact"
@@ -530,6 +734,7 @@ cmd_remove() {
 }
 
 cmd_status() {
+  local tls_failed=0
   if ! installed; then
     echo "installed: no"
     exit 3
@@ -540,6 +745,12 @@ cmd_status() {
   echo "install dir: $ROOT"
   echo "listen: $OHAS_HOST:$OHAS_PORT"
   [ "$OHAS_HOST" != "0.0.0.0" ] || show_network_urls
+  if tls_enabled; then
+    echo "tls: https://$OHAS_TLS_NAME:$OHAS_TLS_PORT (allowed from: ${OHAS_TLS_ALLOW_FROM:-any})"
+    echo "tls cert: $(tls_cert_summary)"
+    if tls_loaded; then echo "tls launchd: loaded"; else echo "tls launchd: not loaded"; fi
+    if tls_ready; then echo "tls ready: OK"; else echo "tls ready: unreachable"; tls_failed=1; fi
+  fi
   warn_if_firewall_blocks
   if sudo launchctl print-disabled system 2>/dev/null | grep -q "\"$LABEL\" => disabled"; then
     echo "boot start: disabled (stopped by user)"
@@ -563,14 +774,24 @@ cmd_status() {
     echo "ready: unreachable ($(health_url))"
     exit 1
   fi
+  [ "$tls_failed" -eq 0 ] || exit 1
 }
 
 cmd_logs() {
-  as_service_user test -f "$LOGS/agent-server.log" || die "no log file yet at $LOGS/agent-server.log"
-  if [ "${1:-}" = "-f" ]; then
-    as_service_user tail -n 100 -f "$LOGS/agent-server.log"
+  local follow=0 file="$LOGS/agent-server.log"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -f) follow=1 ;;
+      --tls) file="$LOGS/tls-front.log" ;;
+      *) die "unknown option for logs: $1" ;;
+    esac
+    shift
+  done
+  as_service_user test -f "$file" || die "no log file yet at $file"
+  if [ "$follow" -eq 1 ]; then
+    as_service_user tail -n 100 -f "$file"
   else
-    as_service_user tail -n 100 "$LOGS/agent-server.log"
+    as_service_user tail -n 100 "$file"
   fi
 }
 
@@ -633,6 +854,31 @@ cmd_key() {
   fi
 }
 
+cmd_ca() {
+  local copy=0 pem=0 value
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --copy) copy=1 ;;
+      --pem) pem=1 ;;
+      *) die "unknown option for ca: $1" ;;
+    esac
+    shift
+  done
+  require_installed
+  load_config
+  tls_enabled || die "TLS is not enabled; run: $0 install --tls-name NAME"
+  [ "$copy" -eq 0 ] || command -v pbcopy >/dev/null 2>&1 || die "pbcopy not found"
+  value="$(as_service_user cat "$TLS_DIR/cert.pem")" || die "cannot read $TLS_DIR/cert.pem"
+  # The Enterprise Secrets form is a single-line field, so the default is one line.
+  [ "$pem" -eq 1 ] || value="$(printf '%s\n' "$value" | base64 | tr -d '\n')"
+  if [ "$copy" -eq 1 ]; then
+    printf '%s\n' "$value" | pbcopy || die "could not copy the certificate"
+    info "TLS certificate copied to clipboard"
+  else
+    printf '%s\n' "$value"
+  fi
+}
+
 [ $# -ge 1 ] || { usage; exit 1; }
 cmd="$1"; shift
 case "$cmd" in install|-h|--help|help) ;; *) select_installed_service ;; esac
@@ -644,7 +890,8 @@ case "$cmd" in
   restart) cmd_restart ;;
   status)  cmd_status ;;
   logs)    cmd_logs "$@" ;;
-  key)     cmd_key ;;
+  key)     cmd_key "$@" ;;
+  ca)      cmd_ca "$@" ;;
   -h|--help|help) usage ;;
   *) usage; exit 1 ;;
 esac

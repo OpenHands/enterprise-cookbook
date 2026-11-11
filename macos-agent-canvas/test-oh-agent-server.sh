@@ -17,6 +17,7 @@ export OHAS_TEST_LOADED="$TMP/loaded"
 export OHAS_TEST_BOOTOUT="$TMP/bootout-pending"
 export OHAS_TEST_CALLS="$TMP/launchctl-calls"
 export OHAS_TEST_AUDIT="$TMP/sudo-audit"
+export OHAS_TEST_TLS_LOADED="$TMP/tls-loaded"
 export TMP_USER_COMMANDS="$TMP/user-commands"
 mkdir -p "$TMP/bin" "$OHAS_HOME" "$OHAS_TARGET_HOME/.local/bin"
 chmod 700 "$OHAS_HOME"
@@ -31,7 +32,9 @@ EOF
 cat >"$OHAS_TARGET_HOME/.local/bin/uv" <<'EOF'
 #!/bin/bash
 case "$1" in
-  venv) mkdir -p "$4/bin"; printf '#!/bin/bash\nexit 0\n' >"$4/bin/python"; chmod +x "$4/bin/python" ;;
+  venv) mkdir -p "$4/bin"
+        printf '#!/bin/bash\ncase "$1" in *tls_front.py) exec "${OHAS_TEST_PYTHON:-python3}" "$@" ;; esac\nexit 0\n' >"$4/bin/python"
+        chmod +x "$4/bin/python" ;;
   pip) exit 0 ;;
   *) exit 1 ;;
 esac
@@ -62,6 +65,16 @@ case "$*" in
     echo bootout >>"$OHAS_TEST_CALLS"
     rm -f "${OHAS_HOME:-}/loaded" "$OHAS_TEST_LOADED"
     touch "$OHAS_TEST_BOOTOUT" ;;
+  'launchctl print system/dev.openhands.agent-server-tls') test -f "$OHAS_TEST_TLS_LOADED" ;;
+  'launchctl bootout system/dev.openhands.agent-server-tls')
+    echo tls-bootout >>"$OHAS_TEST_CALLS"
+    rm -f "$OHAS_TEST_TLS_LOADED" ;;
+  'launchctl bootstrap system '*-tls.plist)
+    echo tls-bootstrap >>"$OHAS_TEST_CALLS"
+    touch "$OHAS_TEST_TLS_LOADED" ;;
+  'launchctl enable system/dev.openhands.agent-server-tls'|'launchctl disable system/dev.openhands.agent-server-tls'|'launchctl disable system/dev.openhands.agent-server') exit 0 ;;
+  'launchctl kickstart system/dev.openhands.agent-server-tls'|'launchctl kickstart -k system/dev.openhands.agent-server-tls')
+    echo tls-kickstart >>"$OHAS_TEST_CALLS" ;;
   'launchctl bootstrap system '*)
     echo bootstrap >>"$OHAS_TEST_CALLS"
     if [ -f "$OHAS_TEST_BOOTOUT" ]; then
@@ -106,7 +119,11 @@ utun3: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> mtu 1500
     inet 10.8.0.1 netmask 0xffffffff
 INTERFACES
 EOF
-chmod +x "$TMP/bin/id" "$TMP/bin/sudo" "$TMP/bin/pbcopy" "$TMP/bin/ifconfig" "$OHAS_TARGET_HOME/.local/bin/uv"
+cat >"$TMP/bin/curl" <<'EOF'
+#!/bin/bash
+echo '{"version":"0.0.0-test"}'
+EOF
+chmod +x "$TMP/bin/id" "$TMP/bin/sudo" "$TMP/bin/pbcopy" "$TMP/bin/ifconfig" "$TMP/bin/curl" "$OHAS_TARGET_HOME/.local/bin/uv"
 export PATH="$TMP/bin:$PATH"
 
 # Source the actual functions without dispatching a CLI command. This lets the
@@ -315,6 +332,9 @@ load_config
 [ "$OH_SESSION_API_KEYS_0" != "$before" ]
 echo 'target-owned-log' >"$LOGS/agent-server.log"
 [ "$(cmd_logs)" = target-owned-log ]
+echo 'target-owned-tls-log' >"$LOGS/tls-front.log"
+[ "$(cmd_logs --tls)" = target-owned-tls-log ]
+if (cmd_logs --unknown >/dev/null 2>&1); then exit 1; fi
 
 if (set_root "$OHAS_TARGET_HOME"; cmd_remove --purge --yes >/dev/null 2>&1); then exit 1; fi
 [ -f "$PLIST" ]
@@ -361,3 +381,108 @@ cmd_remove --purge --yes >"$TMP/retry-remove-output"
 [ ! -e "$PLIST" ]
 
 echo 'Installer user and key tests passed'
+
+if ! "${OHAS_TEST_PYTHON:-python3}" -c 'import cryptography' 2>/dev/null; then
+  echo 'Skipping TLS installer tests: set OHAS_TEST_PYTHON to a Python with the cryptography package' >&2
+  exit 0
+fi
+
+# ---- TLS front end ----------------------------------------------------------
+TLS_PLIST="$TMP/agent-server-tls.plist"
+export OHAS_HOME="$TMP/tls-managed"
+set_root "$OHAS_HOME"
+: >"$OHAS_TEST_CALLS"
+rm -f "$PLIST" "$TLS_PLIST" "$OHAS_TEST_LOADED" "$OHAS_TEST_TLS_LOADED" "$OHAS_TEST_BOOTOUT"
+tls_calls() { grep -c "^$1\$" "$OHAS_TEST_CALLS" || true; }
+
+if (cmd_install --user agenttest --host 0.0.0.0 --tls-name mac.test.example >/dev/null 2>&1); then exit 1; fi
+if (cmd_install --user agenttest --tls-name 'bad name' >/dev/null 2>&1); then exit 1; fi
+if (cmd_install --user agenttest --tls-port 18443 >/dev/null 2>&1); then exit 1; fi
+if (cmd_install --user agenttest --no-tls --tls-name mac.test.example >/dev/null 2>&1); then exit 1; fi
+if (cmd_install --user agenttest --tls-name mac.test.example --tls-port 18100 >/dev/null 2>&1); then exit 1; fi
+if (cmd_install --user agenttest --tls-name mac.test.example --allow-from '10.0.0.0/8; rm' >/dev/null 2>&1); then exit 1; fi
+[ ! -f "$CONFIG" ] && [ ! -f "$TLS_PLIST" ]
+
+export OHAS_SESSION_API_KEY='tls-install_key.1234567890abcdefghijklmnop'
+cmd_install --user agenttest --tls-name mac.test.example --allow-from 192.0.2.0/24,198.51.100.0/24 >"$TMP/tls-install-output" 2>&1
+tls_key="$OHAS_SESSION_API_KEY"
+unset OHAS_SESSION_API_KEY
+load_config
+[ "$OHAS_HOST" = 127.0.0.1 ] && [ "$OHAS_PORT" = 18100 ]
+[ "$OHAS_TLS_NAME" = mac.test.example ] && [ "$OHAS_TLS_PORT" = 18443 ]
+[ "$OHAS_TLS_ALLOW_FROM" = 192.0.2.0/24,198.51.100.0/24 ]
+[ -f "$ROOT/tls/cert.pem" ] && cmp -s "$HERE/tls_front.py" "$ROOT/tls_front.py"
+[ "$(stat -f '%Sp' "$ROOT/tls/key.pem")" = -rw------- ]
+[ "$(stat -f '%Sp' "$ROOT/run-tls-front.sh")" = -rwxr-xr-x ]
+[ "$(plutil -extract Label raw -o - "$TLS_PLIST")" = "$TLS_LABEL" ]
+[ "$(plutil -extract StandardOutPath raw -o - "$TLS_PLIST")" = "$LOGS/tls-front.log" ]
+[ "$(plutil -extract Label raw -o - "$PLIST")" = "$LABEL" ]
+[ "$(tls_calls tls-bootstrap)" -eq 1 ]
+grep -Fq 'Agent Server: https://mac.test.example:18443 (TLS front end)' "$TMP/tls-install-output"
+grep -Fq 'Plain HTTP:   http://127.0.0.1:18100 (this Mac only)' "$TMP/tls-install-output"
+grep -Fq 'Allowed from: 192.0.2.0/24,198.51.100.0/24' "$TMP/tls-install-output"
+grep -Fq 'fingerprint=SHA256:' "$TMP/tls-install-output"
+grep -Fq "MAC_AGENT_SERVER_KEY   $0 key" "$TMP/tls-install-output"
+grep -Fq "MAC_AGENT_SERVER_CA    $0 ca" "$TMP/tls-install-output"
+[ "$(tail -n 1 "$TMP/tls-install-output")" = '         Keep the key secret, and open only port 18443 to the network that needs it.' ]
+assert_not_in_file "$tls_key" "$TMP/tls-install-output"
+
+[ "$(cmd_ca --pem)" = "$(cat "$ROOT/tls/cert.pem")" ]
+ca_line="$(cmd_ca)"
+[[ "$ca_line" != *$'\n'* && "$ca_line" != *' '* ]]
+[ "$(printf '%s' "$ca_line" | base64 -d)" = "$(cat "$ROOT/tls/cert.pem")" ]
+[ "$(cmd_ca --copy)" = '==> TLS certificate copied to clipboard' ]
+[ "$(cat "$OHAS_CLIPBOARD")" = "$ca_line" ]
+if (cmd_ca --unknown >/dev/null 2>&1); then exit 1; fi
+
+# the wrapper turns the allowed networks into repeated --allow-from options
+real_python="$(cat "$VENV/bin/python")"
+printf '#!/bin/bash\nprintf "%%s\\n" "$@"\n' >"$VENV/bin/python"
+wrapper_args="$(bash "$TLS_WRAPPER" | tr '\n' ' ')"
+printf '%s\n' "$real_python" >"$VENV/bin/python"
+[[ "$wrapper_args" == *"tls_front.py serve --cert $ROOT/tls/cert.pem --key $ROOT/tls/key.pem --listen-port 18443 --upstream-port 18100 --allow-from 192.0.2.0/24 --allow-from 198.51.100.0/24 "* ]]
+
+# reinstalling without TLS options keeps the settings and the certificate
+cert_before="$(cat "$ROOT/tls/cert.pem")"
+cmd_install >"$TMP/tls-reinstall-output" 2>&1
+load_config
+[ "$OHAS_TLS_NAME" = mac.test.example ] && [ "$OHAS_HOST" = 127.0.0.1 ] && [ "$OHAS_TLS_PORT" = 18443 ]
+[ "$cert_before" = "$(cat "$ROOT/tls/cert.pem")" ]
+[ "$OH_SESSION_API_KEYS_0" = "$tls_key" ]
+[ "$(tls_calls tls-kickstart)" -eq 1 ] && [ "$(tls_calls tls-bootout)" -eq 0 ]
+if (cmd_install --host 0.0.0.0 >/dev/null 2>&1); then exit 1; fi
+
+# a new name or port replaces the certificate and the registration
+cmd_install --tls-name 203.0.113.9 --tls-port 18444 >"$TMP/tls-rename-output" 2>&1
+load_config
+[ "$OHAS_TLS_NAME" = 203.0.113.9 ] && [ "$OHAS_TLS_PORT" = 18444 ]
+[ "$cert_before" != "$(cat "$ROOT/tls/cert.pem")" ]
+[[ "$(cat "$TMP/tls-rename-output")" == *'names=localhost,203.0.113.9,127.0.0.1'* ]]
+
+# status, stop, start, restart cover both services
+output="$(cmd_status)"
+[[ "$output" == *'tls: https://203.0.113.9:18444 (allowed from: 192.0.2.0/24,198.51.100.0/24)'* ]]
+[[ "$output" == *'tls launchd: loaded'* && "$output" == *'tls ready: OK'* && "$output" == *'tls cert: names='* ]]
+cmd_stop >/dev/null
+[ ! -f "$OHAS_TEST_TLS_LOADED" ] && [ "$(tls_calls tls-bootout)" -eq 1 ]
+kickstarts="$(tls_calls tls-kickstart)"
+cmd_start >/dev/null
+[ -f "$OHAS_TEST_TLS_LOADED" ] && [ "$(tls_calls tls-bootstrap)" -eq 2 ]
+cmd_restart >/dev/null
+[ "$(tls_calls tls-kickstart)" -eq $((kickstarts + 1)) ]
+
+# removing TLS drops the second service but keeps the install
+cmd_install --no-tls >"$TMP/no-tls-output" 2>&1
+load_config
+[ -z "$OHAS_TLS_NAME" ] && [ -z "$OHAS_TLS_PORT" ] && [ "$OHAS_HOST" = 127.0.0.1 ]
+[ ! -e "$TLS_PLIST" ] && [ ! -f "$OHAS_TEST_TLS_LOADED" ] && [ -f "$PLIST" ]
+if (cmd_ca >/dev/null 2>&1); then exit 1; fi
+[[ "$(cat "$TMP/no-tls-output")" == *'Agent Server: http://127.0.0.1:18100'* ]]
+
+# remove deletes both registrations
+cmd_install --tls-name mac.test.example >/dev/null 2>&1
+[ -f "$TLS_PLIST" ]
+cmd_remove --purge --yes >"$TMP/tls-remove-output"
+[ ! -e "$TLS_PLIST" ] && [ ! -e "$PLIST" ] && [ ! -e "$ROOT" ] && [ ! -f "$OHAS_TEST_TLS_LOADED" ]
+
+echo 'Installer TLS tests passed'

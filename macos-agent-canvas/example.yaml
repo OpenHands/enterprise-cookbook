@@ -1,5 +1,5 @@
 ---
 title: macOS Agent Server from Enterprise
-description: Operator-install a Mac Agent Server and verify restricted-network REST access from Enterprise.
+description: Operator-install a Mac Agent Server behind TLS, then call it and give it an LLM and secrets from an Enterprise sandbox.
 category: Secrets & authentication
 icon: desktop
