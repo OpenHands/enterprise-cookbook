@@ -30,13 +30,16 @@ sequenceDiagram
     M-->>O: Show key once in operator terminal
     O->>V: Paste key into Settings > Secrets
     E->>A: Call REST API over restricted internal HTTP with key header
+    E->>A: Copy LLM profile and chosen secrets (sync_llm.py)
 ```
 
 The installer generates an independent `OH_SECRET_KEY` to encrypt the Mac server's stored
 secrets. The session key authenticates HTTP clients; it is **not** an LLM provider key or an SSH
 key. See the [install skill](./skills/macos-agent-server-install/SKILL.md) for the agent-facing
-checklist and the [operations skill](./skills/macos-agent-server-operations/SKILL.md) for later
-management. Both are bundled in this recipe's [plugin](./.claude-plugin/plugin.json).
+checklist, the [LLM setup skill](./skills/macos-agent-server-llm-setup/SKILL.md) for giving the
+Mac an LLM and secrets, and the [operations skill](./skills/macos-agent-server-operations/SKILL.md)
+for later management. All three are bundled in this recipe's
+[plugin](./.claude-plugin/plugin.json).
 
 ## Prerequisites
 
@@ -166,6 +169,76 @@ LLM profile or can run an agent conversation.
 > firewall behavior, Enterprise sandbox egress, and authenticated REST access on a test Mac
 > before publishing it as a working installation guide.
 
+## Give the Mac an LLM and Secrets
+
+The Mac Agent Server has no LLM until you give it one. The `sync_llm.py` script, bundled in the
+[LLM setup skill](./skills/macos-agent-server-llm-setup/SKILL.md), runs in an Enterprise
+conversation and copies your LLM access and the secrets you choose to the Mac. You never see or
+paste the LLM key.
+
+```mermaid
+sequenceDiagram
+    participant E as Enterprise sandbox
+    participant P as Enterprise app
+    participant L as LLM proxy
+    participant A as Mac Agent Server
+    E->>P: Is LLM key export allowed? Get my key (Enterprise API key)
+    E->>L: List models with that key
+    E->>A: Test request with the key (validate)
+    E->>A: Save secrets, then save and activate the LLM profile
+```
+
+**Before you start:**
+
+- An Enterprise administrator turns on **Enable LLM Key Export (BYOR)** in the Replicated Admin
+  Console. It is off by default because it lets users take their LLM key out of the cluster.
+  The script stops with that instruction when it is off.
+- The Mac can reach the LLM proxy at `https://llm-proxy.<your base domain>`, the LLM Proxy
+  Hostname shown in the Admin Console. A Replicated installation publishes it with a
+  certificate. This recipe covers Replicated VM installations only.
+- The secrets you want on the Mac are saved in Enterprise `Settings > Secrets` and are in the
+  conversation's scope.
+
+> [!WARNING]
+> The script sends the LLM key and secrets to the Mac, so it refuses a plain `http://` target.
+> This recipe's installer serves HTTP, so use HTTPS or an encrypted tunnel in front of it.
+> `--allow-insecure-http` overrides the check for a restricted evaluation network, where
+> anyone who can read the traffic can take the LLM key and the secrets.
+
+Start a new conversation with the plugin loaded, as in the previous section, and ask the agent
+to give the Mac an LLM. Its steps are these commands, run from the plugin's skill directory. The
+key names must appear in the command so the sandbox injects them:
+
+```bash
+python3 scripts/sync_llm.py --target https://mac.internal.example:18100 \
+  --api-key-env OPENHANDS_API_KEY --target-key-env MAC_AGENT_SERVER_KEY --list-models
+python3 scripts/sync_llm.py --target https://mac.internal.example:18100 \
+  --api-key-env OPENHANDS_API_KEY --target-key-env MAC_AGENT_SERVER_KEY \
+  --model claude-sonnet-4-5 --secret GITHUB_TOKEN --dry-run
+```
+
+Run the second command without `--dry-run` to apply it. It prints the steps, never a value:
+
+```text
+ok   LLM key export is allowed
+ok   Mac Agent Server reachable at https://mac.internal.example:18100
+ok   the key works at https://llm-proxy.example.com
+ok   the Mac completed a test request through the proxy
+ok   saved 1 secret(s) on the Mac
+ok   LLM profile 'enterprise' saved and active on the Mac
+```
+
+The Mac checks the key before anything is saved, so a bad key or unreachable proxy changes
+nothing. If you refresh your key in Settings, or the installation resets its LLM proxy
+database, the Mac's copy stops working. Run the script with `--check` to find out, and run it
+again without `--check` to fix it. Pass `--enterprise-url` or `--llm-base-url` if the
+installation uses custom hostnames.
+
+> [!IMPORTANT]
+> This script has been tested only against local stand-ins for Enterprise, the LLM proxy, and the
+> Mac Agent Server. Run it once against a real installation with LLM key export turned on before
+> relying on it.
+
 ## Manage the Service
 
 Run these from your operator workstation; each SSH command uses the Mac checkout (and a
@@ -187,13 +260,9 @@ environment, logs, data, `config.env`). That directory is mode `700`; `config.en
 ## Later Work
 
 1. **Encrypted transport:** Add TLS or an encrypted private tunnel before sensitive or
-   production use; plain HTTP exposes the session key to the network path. Keep the Agent
-   Server API off the public internet.
-2. **LLM profile:** Check that BYOR key export is permitted in Enterprise, discover models
-   served by its LiteLLM proxy, ensure that proxy is reachable from the Mac, then configure a
-   Mac Agent Server LLM profile. The Enterprise app API key, LLM provider key, and Mac session
-   key are different credentials.
-3. **Delegate macOS work:** Start and monitor Mac Agent Server conversations with authenticated
+   production use; plain HTTP exposes the session key, LLM key, and copied secrets to the
+   network path. Keep the Agent Server API off the public internet.
+2. **Delegate macOS work:** Start and monitor Mac Agent Server conversations with authenticated
    REST requests from the Enterprise sandbox after validating the LLM profile and the host's
    tool permissions. No Enterprise SSH access is part of this flow.
 
@@ -203,6 +272,11 @@ environment, logs, data, `config.env`). That directory is mode `700`; `config.en
 |---|---|
 | `GET /ready` on the Mac | Unauthenticated process check |
 | `GET /api/settings` on the Mac | Read-only authenticated REST connectivity check |
+| `GET /api/keys/llm/byor/permitted` and `GET /api/keys/llm/byor` on Enterprise | Check that LLM key export is on, then get the user's key |
+| `GET /v1/models` on the LLM proxy | List the models the key can use |
+| `POST /api/profiles/{name}/validate`, `POST /api/profiles/{name}`, `POST /api/profiles/{name}/activate` on the Mac | Test, save, and activate the LLM profile |
+| `PUT /api/settings/secrets` on the Mac | Save a copied secret |
+| `GET /api/profiles/{name}` on the Mac | Read the stored profile for `--check` |
 
 The operator saves the key via Enterprise `Settings > Secrets`, not an Enterprise API call.
 

@@ -34,7 +34,9 @@ network. Do not treat a firewall as transport encryption.
    query the registry for the value, print the variable, put it in a URL, or include it in a
    literal command argument. Confirm personal/organization scope and Agent Profile selection.
 3. Check that the Mac has an active, responding LLM profile. The session key is not an LLM
-   provider key. If none exists, stop until the LLM provisioning installment is complete.
+   provider key. If none exists, or the check fails, use the
+   [LLM setup skill](../macos-agent-server-llm-setup/SKILL.md) (`sync_llm.py --check`, then the
+   sync) before going on.
 4. Before starting a Mac Agent Server conversation, confirm the workspace path, service user,
    tool permissions, expected outputs, and data sensitivity with the user. Authenticate REST
    calls using `X-Session-API-Key` and observe the result. Do not default to unrestricted host

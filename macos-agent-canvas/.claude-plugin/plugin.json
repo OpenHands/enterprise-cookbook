@@ -1,7 +1,7 @@
 {
   "name": "macos-agent-canvas",
   "version": "0.1.0",
-  "description": "Operator-install a Mac Agent Server for REST access from Enterprise sandboxes.",
+  "description": "Operator-install a Mac Agent Server, and give it an LLM and secrets from Enterprise sandboxes.",
   "license": "MIT",
   "keywords": ["macos", "agent-server", "enterprise", "rest"]
 }
