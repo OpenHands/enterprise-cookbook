@@ -10,8 +10,11 @@ Enterprise does **not** SSH to the Mac or receive the operator's SSH credentials
 is a separate host, not an Enterprise sandbox. Automated tests and a real launchd install,
 authenticated local/LAN TLS, stop/start, reinstall, source allow-list, and purge have passed
 on macOS 15.6.1 (arm64). The Mac's application firewall was disabled during testing.
-Reboot persistence, LLM/secrets sync, and the sandbox-to-Mac Agent Server path remain
-unverified; a sandbox-to-Mac ngrok test with a fixed-response server did pass.
+Reboot persistence, private-network sandbox access, and Replicated VM integration remain
+unverified. From an OpenHands Cloud sandbox, a real Mac Agent Server behind ngrok passed
+session-key authentication, LLM sync using an HTTPS LiteLLM proxy, and a tool-free
+conversation that answered a science dad joke. Tool-enabled delegation is not yet tested
+on the Mac.
 
 > [!WARNING]
 > **The session key is all it takes to run commands on the Mac as its service user.** HTTPS
@@ -55,8 +58,10 @@ secrets. The session key authenticates HTTP clients; it is **not** an LLM provid
 key. See the [install skill](./skills/macos-agent-server-install/SKILL.md) for the agent-facing
 checklist, the [LLM setup skill](./skills/macos-agent-server-llm-setup/SKILL.md) for giving the
 Mac an LLM and secrets, and the [operations skill](./skills/macos-agent-server-operations/SKILL.md)
-for later management. All three are bundled in this recipe's
-[plugin](./.claude-plugin/plugin.json).
+for management and delegation. All three are bundled in this recipe's
+[plugin](./.plugin/plugin.json), which is listed in the repository's
+[marketplace](../.plugin/marketplace.json). The existing
+[Claude-compatible manifest](./.claude-plugin/plugin.json) is retained.
 
 ## Prerequisites
 
@@ -304,12 +309,11 @@ to the Mac API, **not** that the Mac has an LLM profile or can run an agent conv
 
 > [!IMPORTANT]
 > On macOS 15.6.1, both launchd services ran and authenticated REST worked locally and via
-> the Mac's private LAN address. The application firewall was off; a client on a second
-> machine, enabled-firewall behavior, and the sandbox-to-Mac **Agent Server** path have not
-> been tested. Separately, a fixed-response loopback test server behind an ngrok endpoint
-> with Basic Auth did return its expected response from an `app.all-hands.dev` sandbox. That
-> proves ngrok egress, **not** this Agent Server or its session-key authentication. Verify
-> the actual route before relying on it.
+> the Mac's private LAN address. From an OpenHands Cloud sandbox, authenticated access to a
+> real Agent Server over ngrok, LLM sync, and a tool-free conversation have also passed.
+> The application firewall was off during private-network testing; a client on a second
+> machine, enabled-firewall behavior, and direct sandbox-to-Mac **private-network** access
+> remain unverified. Check the intended route from your own sandbox.
 
 ## Give the Mac an LLM and Secrets
 
@@ -397,10 +401,76 @@ with `--check` to find out, and run it again without `--check` to fix it. Pass
 `--enterprise-url` or `--llm-base-url` if the installation uses custom hostnames.
 
 > [!IMPORTANT]
-> The script's tests use local stand-ins. It has also run end to end against OpenHands Cloud
-> (LLM key export, the public LLM proxy) and a real Agent Server behind this recipe's TLS front
-> end on Linux. It has not run against a Replicated VM installation or a Mac. Run it once there,
-> with LLM key export turned on, before relying on it.
+> The script's tests use local stand-ins. It has also run against OpenHands Cloud (LLM key
+> export and an HTTPS LLM proxy) and a real Mac Agent Server through ngrok with
+> `gpt-6.1-sol`; the Mac completed a test request. A separate run used this recipe's TLS
+> front end on Linux. It has not been validated against a Replicated VM installation. Check
+> the correct LLM Proxy Hostname in the Admin Console; use `--llm-base-url` for custom
+> hostnames. Never fall back to plain HTTP to work around DNS or certificate errors.
+
+## Delegate a Conversation on the Mac
+
+The [operations skill](./skills/macos-agent-server-operations/SKILL.md) bundles
+[`scripts/delegate.py`](./skills/macos-agent-server-operations/scripts/delegate.py),
+which starts **one** remote conversation and polls its status from an Enterprise sandbox.
+Confirm the Mac service user, the **absolute Mac workspace** (not the Enterprise sandbox
+path), the exact task, whether any tools are necessary, and the sensitivity of files it
+might access. The default has no tools, no extra secrets, no repository worktree, a
+10-iteration cap, and a two-minute polling deadline. A workspace path alone does **not**
+restrict filesystem access for an agent with tools; Mac tools run as the service user
+without container isolation. Never include secrets in the prompt or command arguments.
+Check that the Mac's active LLM profile works with `sync_llm.py --check` before delegating.
+
+Run these examples from the plugin's `macos-agent-canvas/` directory in the **Enterprise
+sandbox**, after confirming `/tmp` is the intended Mac workspace. Both only request a
+joke and give the agent **zero tools**:
+
+<!-- docs:tabs -->
+
+### Private network (Mac TLS front end)
+
+```bash
+python3 skills/macos-agent-server-operations/scripts/delegate.py \
+  --target https://mac.internal.example:18443 \
+  --target-key-env MAC_AGENT_SERVER_KEY --ca-cert-env MAC_AGENT_SERVER_CA \
+  --workspace /tmp --prompt 'Tell me one short dad joke about science.'
+```
+
+### Temporary ngrok demo
+
+```bash
+python3 skills/macos-agent-server-operations/scripts/delegate.py \
+  --target https://YOUR_NGROK_HOSTNAME \
+  --target-key-env MAC_AGENT_SERVER_KEY \
+  --workspace /tmp --prompt 'Tell me one short dad joke about science.'
+```
+
+<!-- /docs:tabs -->
+
+Only add `--tool terminal`, `--tool file_editor`, or `--tool task_tracker` after the user
+approves what that Mac account may do. The script checks the active profile, reads
+`GET /api/settings` with `X-Expose-Secrets: encrypted`, forwards the encrypted LLM
+configuration with `secrets_encrypted: true`, and sends an `initial_message` with
+`run: true`. It does **not** fetch plaintext profile credentials, forward the sandbox's
+secrets or MCP configuration, or need a separate `/run` call. It then polls
+`GET /api/conversations/{id}` until `finished`; `idle` alone is not completion. On
+success it reads only the latest agent text from `GET /api/conversations/{id}/events/search`
+(`items`, not `events`) rather than printing raw events or encrypted reasoning content.
+
+The script prints the conversation ID when it is created. If polling times out, the
+conversation may still be running; the script does not stop or recreate it. Investigate
+`error`, `stuck`, or confirmation-required statuses using that ID, rather than blindly
+retrying the create request. For example, inspect only the status (not raw settings):
+
+```bash
+curl -fsS -H "X-Session-API-Key: $MAC_AGENT_SERVER_KEY" \
+  'https://YOUR_NGROK_HOSTNAME/api/conversations/CONVERSATION_ID' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["execution_status"])'
+```
+
+A tool-free joke conversation using `gpt-6.1-sol` finished on the real Mac through ngrok;
+the helper's TLS, payload, error, and polling paths have offline loopback tests. Running
+a tool-enabled task through this helper on the Mac remains unverified.
 
 ## Manage the Service
 
@@ -443,9 +513,8 @@ deleting and re-adding the `MAC_AGENT_SERVER_CA` secret. To replace it sooner, d
 
 ## Later Work
 
-1. **Delegate macOS work:** Start and monitor Mac Agent Server conversations with authenticated
-   REST requests from the Enterprise sandbox after validating the LLM profile and the host's
-   tool permissions. No Enterprise SSH access is part of this flow.
+1. **Tool-enabled delegation:** Validate explicit Mac tool permissions and run a scoped
+   task on the real Mac, including its workspace and service-account restrictions.
 2. **Hardening:** Rotate the session key without re-pasting by hand, add certificates from a
    private CA instead of a self-signed one, and test reboot persistence, the enabled macOS
    application firewall, dedicated service users, and a Replicated VM.
@@ -461,6 +530,9 @@ deleting and re-adding the `MAC_AGENT_SERVER_CA` secret. To replace it sooner, d
 | `POST /api/profiles/{name}/validate`, `POST /api/profiles/{name}`, `POST /api/profiles/{name}/activate` on the Mac | Test, save, and activate the LLM profile |
 | `PUT /api/settings/secrets` on the Mac | Save a copied secret |
 | `GET /api/profiles/{name}` on the Mac | Read the stored profile for `--check` |
+| `GET /api/profiles`, `GET /api/settings` with `X-Expose-Secrets: encrypted` on the Mac | Check the active profile and retrieve forwardable encrypted agent settings |
+| `POST /api/conversations` on the Mac | Start a scoped conversation with `secrets_encrypted: true` and `initial_message.run: true` |
+| `GET /api/conversations/{id}`, `GET /api/conversations/{id}/events/search` on the Mac | Poll status and read only the agent text |
 
 The operator saves the key and certificate via Enterprise `Settings > Secrets`, not an
 Enterprise API call.

@@ -51,5 +51,40 @@ stop the ngrok tunnel after the demo.
    calls using `X-Session-API-Key` and observe the result. Do not default to unrestricted host
    changes or assume `/ready` means a conversation will run successfully.
 
-The later delegation installment will supply a validated conversation-start request and REST
-monitoring commands after testing the Mac and LLM profile end to end.
+## Delegate a Task
+
+Use the bundled [`scripts/delegate.py`](./scripts/delegate.py) from this skill's directory
+in the Enterprise sandbox. Ask the user to approve the **absolute path on the Mac** and
+exact task first. Confirm the service user and data sensitivity, and ask which tools (if
+any) the task needs. The default is **no tools**; `--tool terminal`, `--tool file_editor`,
+and `--tool task_tracker` are opt-in and run as the Mac service user without sandbox
+isolation. A workspace path is not a filesystem permission boundary. Never put a secret
+in `--prompt` or pass a credential value as an argument.
+
+For a private TLS front end, pin the saved Mac certificate:
+
+```bash
+python3 scripts/delegate.py --target https://mac.internal.example:18443 \
+  --target-key-env MAC_AGENT_SERVER_KEY --ca-cert-env MAC_AGENT_SERVER_CA \
+  --workspace /tmp --prompt 'Tell me one science dad joke.'
+```
+
+For an ngrok demo, use its public-CA HTTPS endpoint without `--ca-cert-env`:
+
+```bash
+python3 scripts/delegate.py --target https://YOUR_NGROK_HOSTNAME \
+  --target-key-env MAC_AGENT_SERVER_KEY \
+  --workspace /tmp --prompt 'Tell me one science dad joke.'
+```
+
+These are tool-free examples. Only add a `--tool NAME` after explicitly discussing host
+access with the user; do not infer permission to edit the Mac from permission to tell a
+joke. The script requires an active profile, gets **encrypted** settings with
+`X-Expose-Secrets: encrypted`, sends `secrets_encrypted: true` and an initial message
+with `run: true`, then polls the conversation. It prints the conversation ID once
+created and only the final agent text, not the settings, LLM credential, or raw events.
+A timeout stops **polling**, not the Mac conversation; `idle` is not completion. For
+`error`, `stuck`, confirmation-required, or timeout, report the ID and status, and do
+not reissue the create request blindly. Use `sync_llm.py --check` if the profile stops
+responding. The tool-free conversation flow has been exercised on a Mac through ngrok;
+opt-in tool execution has only offline loopback tests so far.

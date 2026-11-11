@@ -2,6 +2,10 @@
 
 A collection of example code for working with the OpenHands API.
 
+The [marketplace index](./.plugin/marketplace.json) currently registers the
+[macOS Agent Server plugin](./macos-agent-canvas/); other examples can be loaded
+from their own paths.
+
 ## Examples
 
 Examples are grouped by topic. Some examples span more than one topic and are
@@ -51,7 +55,7 @@ Inject credentials and manage identity.
 | [service-account-github-pat](./service-account-github-pat/) | Use one OpenHands SaaS account as a **service account**, overriding the managed `GITHUB_TOKEN` with each user's GitHub PAT per conversation |
 | [aws-secrets-sync](./aws-secrets-sync/) | Sync AWS Secrets Manager values into personal or organization scope; adapt the source reader for other vaults |
 | [gpg-commit-signing](./gpg-commit-signing/) | Configure **GPG commit signing** on **every** conversation (not just when a repo is selected) with a `SessionStart` hook that imports a key from a custom secret |
-| [macos-agent-canvas](./macos-agent-canvas/) | **Draft:** Install a remote Mac Agent Server over SSH behind TLS, save its key and certificate as Enterprise secrets, and give it an LLM and secrets from a sandbox |
+| [macos-agent-canvas](./macos-agent-canvas/) | **Draft:** Install a remote Mac Agent Server behind TLS, configure its LLM from an Enterprise sandbox, and delegate scoped tasks with authenticated REST |
 
 ### Onboarding & org admin
 
