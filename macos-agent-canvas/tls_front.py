@@ -4,7 +4,8 @@
 The Agent Server speaks plain HTTP and calls itself over plain HTTP on loopback,
 so it cannot terminate TLS. Run it on 127.0.0.1 and put this in front of it:
 
-    tls_front.py gen-cert --name mac.internal.example --dir ~/.openhands-agent-server/tls
+    tls_front.py gen-cert --name mac.internal.example \\
+        --dir ~/.openhands-agent-server/tls
     tls_front.py serve --cert .../cert.pem --key .../key.pem --upstream-port 18100
     tls_front.py cert-info --cert .../cert.pem
 
