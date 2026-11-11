@@ -318,6 +318,7 @@ def test_check_without_a_profile_says_to_sync_first(world, capsys):
     ("enterprise_url", "expected"),
     [
         ("https://app.example.com", "https://llm-proxy.example.com"),
+        ("https://app.all-hands.dev", "https://llm-proxy.app.all-hands.dev"),
         (
             "https://app.beta.staging.example.dev",
             "https://llm-proxy.beta.staging.example.dev",

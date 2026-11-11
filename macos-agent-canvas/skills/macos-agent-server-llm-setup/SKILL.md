@@ -56,5 +56,6 @@ Secret values stay in environment variables and are never printed.
   Python 3.10 or later, standard library only. `$MAC_AGENT_SERVER_CA` holds the Mac's
   certificate, as PEM or one line of base64. It works out the Enterprise URL from the
   sandbox environment and the LLM proxy URL from the Enterprise hostname
-  (`app.example.com` becomes `llm-proxy.example.com`). Pass `--enterprise-url` or
+  (`app.example.com` becomes `llm-proxy.example.com`; Cloud's `app.all-hands.dev`
+  becomes `llm-proxy.app.all-hands.dev`). Pass `--enterprise-url` or
   `--llm-base-url` if the installation uses custom hostnames.
