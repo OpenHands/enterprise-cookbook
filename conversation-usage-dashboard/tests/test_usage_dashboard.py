@@ -1,0 +1,212 @@
+import http.client
+import json
+import threading
+from http.server import ThreadingHTTPServer
+from urllib.error import HTTPError
+from urllib.request import urlopen
+
+import pytest
+import usage_dashboard as ud
+from fixture_api import (
+    API_KEY,
+    FULL,
+    ORG_ID,
+    PARTIAL,
+    TOTALS_ONLY,
+    USAGE,
+    FixtureApi,
+)
+
+
+@pytest.fixture
+def api():
+    fixture = FixtureApi().start()
+    yield fixture
+    fixture.stop()
+
+
+@pytest.fixture
+def dashboard(api):
+    client = ud.UsageClient(api.url, API_KEY, ORG_ID)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ud.make_handler(client))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def get(url):
+    try:
+        with urlopen(url) as response:
+            return response.status, json.loads(response.read())
+    except HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def test_list_paginates_and_sends_bearer_get(api, dashboard):
+    status, first = get(f"{dashboard}/api/conversations?per_page=20")
+    assert status == 200
+    assert (first["total_items"], first["total_pages"], len(first["items"])) == (
+        25,
+        2,
+        20,
+    )
+    _, second = get(f"{dashboard}/api/conversations?page=2&per_page=20")
+    assert [c["title"] for c in second["items"]][0] == "Synthetic run 21"
+    assert {r["method"] for r in api.requests} == {"GET"}
+    assert {r["auth"] for r in api.requests} == {f"Bearer {API_KEY}"}
+    assert "page=2&per_page=20" in api.requests[-1]["path"]
+
+
+def raw_get(dashboard, path, hosts):
+    port = int(dashboard.rsplit(":", 1)[1])
+    conn = http.client.HTTPConnection("127.0.0.1", port)
+    conn.putrequest("GET", path, skip_host=True)
+    for host in hosts:
+        conn.putheader("Host", host)
+    conn.endheaders()
+    response = conn.getresponse()
+    body = json.loads(response.read())
+    conn.close()
+    return response.status, body
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1:{port}", "LOCALHOST:{port}"])
+def test_loopback_host_is_accepted(dashboard, host):
+    port = dashboard.rsplit(":", 1)[1]
+    status, _ = raw_get(dashboard, "/api/conversations", [host.format(port=port)])
+    assert status == 200
+
+
+@pytest.mark.parametrize(
+    "hosts",
+    [
+        ["attacker.example:{port}"],
+        ["localhost.attacker.example:{port}"],
+        ["127.0.0.1"],
+        ["127.0.0.1:1"],
+        [],
+        ["127.0.0.1:{port}", "attacker.example:{port}"],
+    ],
+)
+def test_other_hosts_are_rejected_before_any_upstream_call(api, dashboard, hosts):
+    port = dashboard.rsplit(":", 1)[1]
+    status, body = raw_get(
+        dashboard, "/api/conversations", [h.format(port=port) for h in hosts]
+    )
+    assert (status, body) == (403, {"error": "Forbidden host.", "status": 403})
+    assert api.requests == []
+
+
+def test_list_drops_fields_the_dashboard_does_not_need(dashboard):
+    _, page = get(f"{dashboard}/api/conversations")
+    assert set(page["items"][0]) == set(ud.LIST_FIELDS)
+    assert page["items"][0]["tags"] == {"team": "alpha", "env": "demo"}
+
+
+def test_search_and_status_go_to_the_api(api, dashboard):
+    _, page = get(f"{dashboard}/api/conversations?search=run+1&execution_status=error")
+    assert "search=run+1" in api.requests[-1]["path"]
+    assert "execution_status=error" in api.requests[-1]["path"]
+    assert all(c["execution_status"] == "error" for c in page["items"])
+
+
+def test_tag_filter_applies_to_the_loaded_page_only(api, dashboard):
+    _, page = get(f"{dashboard}/api/conversations?tag=team%3Dbeta&per_page=10")
+    assert "tag" not in api.requests[-1]["path"]
+    assert page["loaded"] == 10
+    assert len(page["items"]) == 5
+    assert all(c["tags"]["team"] == "beta" for c in page["items"])
+
+
+def test_matches_tag():
+    assert ud.matches_tag({"team": "a"}, "team")
+    assert ud.matches_tag({"team": "a"}, "team = a")
+    assert not ud.matches_tag({"team": "a"}, "team=b")
+    assert not ud.matches_tag({}, "team")
+
+
+def test_detail_403_names_setting_and_role(dashboard):
+    status, body = get(f"{dashboard}/api/conversations/{FULL}/usage")
+    assert status == 403
+    assert "PATCH /api/organizations/{org_id}" in body["error"]
+    assert "Owner or Admin key" in body["error"]
+
+
+def test_detail_toggles_without_restart(api, dashboard):
+    api.detail_enabled = True
+    assert get(f"{dashboard}/api/conversations/{FULL}/usage")[0] == 200
+    api.detail_enabled = False
+    assert get(f"{dashboard}/api/conversations/{FULL}/usage")[0] == 403
+
+
+def test_detail_returns_totals_and_buckets_unchanged(api, dashboard):
+    api.detail_enabled = True
+    _, d = get(f"{dashboard}/api/conversations/{FULL}/usage")
+    assert d == USAGE[FULL]
+
+
+def test_partial_detail_keeps_unknown_distinct_from_zero(api, dashboard):
+    api.detail_enabled = True
+    _, d = get(f"{dashboard}/api/conversations/{PARTIAL}/usage")
+    assert d["completeness"] == "partial"
+    assert d["incomplete_reasons"] == ["task_usage_missing", "unknown_counters"]
+    assert d["totals"]["reasoning_tokens"] is None
+    assert d["totals"]["cache_read_tokens"] == 0
+
+
+def test_totals_only(api, dashboard):
+    api.detail_enabled = True
+    _, d = get(f"{dashboard}/api/conversations/{TOTALS_ONLY}/usage")
+    assert (d["completeness"], d["buckets"]) == ("totals_only", [])
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        (302, {"Location": "/steal"}, b""),
+        (200, {"Content-Type": "text/html"}, b"<html>proxy login</html>"),
+        (200, {"Content-Type": "application/json"}, b"[1, 2]"),
+        (200, {"Content-Type": "application/json"}, b'{"unexpected": true}'),
+        (500, {}, b"Traceback: secret detail"),
+    ],
+)
+def test_unexpected_upstream_is_a_sanitized_502(api, dashboard, raw):
+    api.raw_response = raw
+    api.detail_enabled = True
+    for path in ("/api/conversations", f"/api/conversations/{FULL}/usage"):
+        status, body = get(dashboard + path)
+        assert status == 502
+        assert "secret" not in body["error"] and "html" not in body["error"]
+    assert all("steal" not in r["path"] for r in api.requests)
+
+
+def test_missing_and_invalid_conversation(api, dashboard):
+    api.detail_enabled = True
+    missing = "00000000-0000-4000-8000-999999999999"
+    assert get(f"{dashboard}/api/conversations/{missing}/usage")[0] == 404
+    assert get(f"{dashboard}/api/conversations/bad%2Fid/usage")[0] == 400
+
+
+def test_wrong_key_gives_message_without_the_key(api):
+    client = ud.UsageClient(api.url, "wrong-key", ORG_ID)
+    with pytest.raises(ud.ApiError) as e:
+        client.list_conversations()
+    assert e.value.status == 401
+    assert "wrong-key" not in e.value.message
+
+
+def test_unreachable_api_message_hides_url():
+    client = ud.UsageClient("http://127.0.0.1:9", API_KEY, ORG_ID, timeout=2)
+    with pytest.raises(ud.ApiError) as e:
+        client.list_conversations()
+    assert e.value.status == 502
+    assert API_KEY not in str(e.value) and "127.0.0.1" not in str(e.value)
+
+
+def test_only_get_is_served(dashboard):
+    from urllib.request import Request
+
+    with pytest.raises(HTTPError) as e:
+        urlopen(Request(f"{dashboard}/api/conversations", method="PATCH"))
+    assert e.value.code == 501

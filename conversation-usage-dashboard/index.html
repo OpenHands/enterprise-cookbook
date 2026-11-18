@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conversation Usage</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 1.5rem; color: #222; }
+  form, .pager { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: .75rem; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; }
+  th, td { border-bottom: 1px solid #ddd; padding: .3rem .5rem; text-align: left; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr.row { cursor: pointer; }
+  tbody tr.row:hover, tr.selected { background: #eef4ff; }
+  .tag { background: #eee; border-radius: 3px; padding: 0 .3rem; margin-right: .2rem; }
+  .unknown { color: #999; font-style: italic; }
+  .error { background: #fff1f0; border: 1px solid #f5b5ae; padding: .5rem; }
+  .note { color: #555; }
+</style>
+</head>
+<body>
+<h1>Conversation Usage</h1>
+<form id="filters">
+  <input name="search" placeholder="Search title or creator">
+  <select name="execution_status">
+    <option value="">Any status</option>
+    <option>idle</option><option>running</option><option>paused</option>
+    <option>finished</option><option>error</option><option>stuck</option>
+  </select>
+  <input name="tag" placeholder="Tag: key or key=value">
+  <select name="per_page"><option>20</option><option>50</option><option>100</option></select>
+  <button>Load</button>
+</form>
+<div id="list-status" class="note"></div>
+<table>
+  <thead><tr>
+    <th>Title</th><th>Creator</th><th>Status</th><th>Tags</th><th>Model</th>
+    <th class="n">Cost</th><th class="n">Tokens</th><th>Updated</th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<div class="pager">
+  <button id="prev">Previous</button><span id="page"></span><button id="next">Next</button>
+</div>
+<section id="detail"></section>
+
+<script>
+const COUNTERS = ["cost", "prompt_tokens", "completion_tokens", "cache_read_tokens",
+  "cache_write_tokens", "reasoning_tokens"];
+const HEADS = ["Cost", "Input", "Output", "Cache read", "Cache write", "Reasoning"];
+let page = 1, totalPages = 0, listRequest = 0, detailRequest = 0;
+
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
+function num(v, isCost) {
+  if (v === null || v === undefined) return el("td", "unknown", "n unknown");
+  return el("td", isCost ? "$" + v.toFixed(4) : v.toLocaleString(), "n");
+}
+function table(head, rows, firstNumeric = head.length) {
+  const t = el("table"), tr = el("tr");
+  head.forEach((h, i) => tr.append(el("th", h, i >= firstNumeric ? "n" : "")));
+  t.append(el("thead")); t.tHead.append(tr);
+  const body = el("tbody"); rows.forEach(r => body.append(r)); t.append(body);
+  return t;
+}
+function counterRow(label, cells, usage) {
+  const tr = el("tr");
+  [label, ...cells].forEach(c => tr.append(el("td", c ?? "")));
+  COUNTERS.forEach(c => tr.append(num(usage[c], c === "cost")));
+  return tr;
+}
+async function getJson(url) {
+  const r = await fetch(url);
+  const data = await r.json();
+  if (!r.ok) throw Object.assign(new Error(data.error), { status: r.status });
+  return data;
+}
+
+async function loadList() {
+  const params = new URLSearchParams(new FormData(document.getElementById("filters")));
+  params.set("page", page);
+  for (const [k, v] of [...params]) if (!v) params.delete(k);
+  const status = document.getElementById("list-status");
+  const rows = document.getElementById("rows");
+  const request = ++listRequest;
+  rows.replaceChildren();
+  document.getElementById("detail").replaceChildren();
+  detailRequest++;
+  status.textContent = "Loading…";
+  try {
+    const data = await getJson("/api/conversations?" + params);
+    if (request !== listRequest) return;
+    totalPages = data.total_pages;
+    document.getElementById("page").textContent =
+      `Page ${data.page} of ${Math.max(data.total_pages, 1)} (${data.total_items} conversations)`;
+    status.textContent = data.tag
+      ? `Tag filter "${data.tag}" matched ${data.items.length} of the ${data.loaded} conversations on this page.`
+      : "";
+    if (!data.pagination_accurate) status.textContent += " Page counts are approximate.";
+    if (!data.items.length) {
+      const tr = el("tr");
+      tr.append(Object.assign(el("td", "No conversations."), { colSpan: 8 }));
+      rows.append(tr);
+    }
+    for (const c of data.items) {
+      const tr = el("tr", undefined, "row");
+      tr.dataset.id = c.id;
+      tr.append(el("td", c.title || "(untitled)"), el("td", c.user_email || "unknown"),
+        el("td", c.execution_status || "unknown"));
+      const tags = el("td");
+      Object.entries(c.tags || {}).forEach(([k, v]) => tags.append(el("span", `${k}=${v}`, "tag")));
+      tr.append(tags, el("td", c.llm_model || "unknown"), num(c.accumulated_cost, true),
+        num(c.total_tokens), el("td", (c.updated_at || "").replace("T", " ").slice(0, 16)));
+      tr.onclick = () => loadDetail(c, tr);
+      rows.append(tr);
+    }
+  } catch (e) {
+    if (request !== listRequest) return;
+    totalPages = 0;
+    document.getElementById("page").textContent = "";
+    status.replaceChildren(el("div", e.message, "error"));
+  }
+  document.getElementById("prev").disabled = page <= 1;
+  document.getElementById("next").disabled = page >= totalPages;
+}
+
+async function loadDetail(conv, tr) {
+  document.querySelectorAll("tr.selected").forEach(r => r.classList.remove("selected"));
+  tr.classList.add("selected");
+  const request = ++detailRequest;
+  const out = document.getElementById("detail");
+  out.replaceChildren(el("h2", conv.title || "(untitled)"), el("p", "Loading usage…", "note"));
+  let d;
+  try {
+    d = await getJson(`/api/conversations/${encodeURIComponent(conv.id)}/usage`);
+  } catch (e) {
+    if (request === detailRequest) out.replaceChildren(el("h2", conv.title || "(untitled)"), el("div", e.message, "error"));
+    return;
+  }
+  if (request !== detailRequest) return;
+  d.incomplete_reasons ??= [];
+  d.task_calls ??= [];
+  const reasons = d.incomplete_reasons.length ? ` (${d.incomplete_reasons.join(", ")})` : "";
+  const parts = [el("h2", conv.title || "(untitled)"),
+    el("p", `Completeness: ${d.completeness}${reasons}`, d.completeness === "full" ? "note" : "error")];
+  const rows = [counterRow("Recorded total", ["", ""], d.totals)];
+  d.buckets.forEach(b => rows.push(counterRow(b.kind, [b.task_id || "", b.model || "unknown"], b.usage)));
+  parts.push(table(["Part", "Task", "Model", ...HEADS], rows, 3));
+  if (!d.buckets.length) parts.push(el("p", "No per-part breakdown was recorded; only totals are available.", "note"));
+  parts.push(el("p", "Recorded totals and bucket values come from separate records and may not add up; check completeness. Reasoning tokens may already be counted in output tokens. \"unknown\" means not recorded; 0 means recorded as zero.", "note"));
+  if (d.task_calls.length) {
+    parts.push(el("h3", "Tasks"));
+    parts.push(table(["Task", "Agent", "Status", "Resumed", "Started", "Ended", "Seconds"],
+      d.task_calls.map(t => {
+        const r = el("tr");
+        [t.task_id, t.agent_type, t.status, t.resumed === null ? "unknown" : String(t.resumed),
+          t.started_at, t.ended_at, t.duration_seconds === null ? null : t.duration_seconds.toFixed(1)]
+          .forEach(v => r.append(v === null || v === undefined ? el("td", "unknown", "unknown") : el("td", v)));
+        return r;
+      })));
+  }
+  out.replaceChildren(...parts);
+}
+
+document.getElementById("filters").onsubmit = e => { e.preventDefault(); page = 1; loadList(); };
+document.getElementById("prev").onclick = () => { page--; loadList(); };
+document.getElementById("next").onclick = () => { page++; loadList(); };
+loadList();
+</script>
+</body>
+</html>
