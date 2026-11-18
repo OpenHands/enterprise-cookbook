@@ -17,14 +17,6 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://app.all-hands.dev"
-COUNTERS = (
-    "cost",
-    "prompt_tokens",
-    "completion_tokens",
-    "cache_read_tokens",
-    "cache_write_tokens",
-    "reasoning_tokens",
-)
 LIST_FIELDS = (
     "id",
     "title",
@@ -58,10 +50,12 @@ ERROR_MESSAGES = {
     "Use an Owner or Admin key for ORG_ID.",
     404: "Not found. Check ORG_ID and OH_API_BASE.",
 }
-DETAIL_DISABLED = (
-    "Detailed usage is off for this organization. An Owner or Admin can turn "
-    "it on with PATCH /api/organizations/{org_id}."
+DETAIL_FORBIDDEN = (
+    "Detailed usage isn't available. It requires an Owner or Admin key, and "
+    "an Owner or Admin must turn it on for the organization with "
+    "PATCH /api/organizations/{org_id}."
 )
+BAD_UPSTREAM = "The OpenHands API returned an unexpected response."
 
 
 class UsageClient:
@@ -76,16 +70,24 @@ class UsageClient:
     def _get(self, path: str, params=None) -> dict:
         try:
             response = self.session.get(
-                self.base + path, params=params, timeout=self.timeout
+                self.base + path,
+                params=params,
+                timeout=self.timeout,
+                allow_redirects=False,
             )
         except requests.RequestException:
             raise ApiError(502, "Couldn't reach the OpenHands API.") from None
-        if response.ok:
-            return response.json()
-        message = ERROR_MESSAGES.get(
-            response.status_code, f"The API returned {response.status_code}."
-        )
-        raise ApiError(response.status_code, message)
+        if response.status_code == 200:
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+            if not isinstance(data, dict):
+                raise ApiError(502, BAD_UPSTREAM)
+            return data
+        if response.status_code in ERROR_MESSAGES:
+            raise ApiError(response.status_code, ERROR_MESSAGES[response.status_code])
+        raise ApiError(502, f"The OpenHands API returned {response.status_code}.")
 
     def list_conversations(
         self, page=1, per_page=20, search=None, execution_status=None
@@ -102,7 +104,7 @@ class UsageClient:
             return self._get(f"/conversations/{conversation_id}/usage")
         except ApiError as e:
             if e.status == 403:
-                raise ApiError(403, DETAIL_DISABLED) from None
+                raise ApiError(403, DETAIL_FORBIDDEN) from None
             raise
 
 
@@ -120,6 +122,8 @@ def conversation_page(client: UsageClient, query: dict) -> dict:
     data = client.list_conversations(
         page, per_page, query.get("search"), query.get("execution_status")
     )
+    if not isinstance(data.get("items"), list):
+        raise ApiError(502, BAD_UPSTREAM)
     items = [{k: item.get(k) for k in LIST_FIELDS} for item in data["items"]]
     tag = (query.get("tag") or "").strip()
     if tag:
@@ -136,30 +140,14 @@ def conversation_page(client: UsageClient, query: dict) -> dict:
     }
 
 
-def unattributed(totals: dict, buckets: list[dict]) -> dict:
-    """Recorded totals minus the bucket sum, per counter.
-
-    Buckets are disjoint parts of the totals, so they are never added to
-    them. A counter is None when the totals or any bucket didn't report it.
-    """
-    result = {}
-    for name in COUNTERS:
-        values = [b["usage"].get(name) for b in buckets]
-        total = totals.get(name)
-        if total is None or None in values:
-            result[name] = None
-        else:
-            result[name] = round(total - sum(values), 10)
-    return result
-
-
 def usage_detail(client: UsageClient, conversation_id: str) -> dict:
     if not CONVERSATION_ID.match(conversation_id):
         raise ApiError(400, "Invalid conversation ID.")
     data = client.get_usage(conversation_id)
-    data["unattributed"] = (
-        unattributed(data["totals"], data["buckets"]) if data["buckets"] else None
-    )
+    if not isinstance(data.get("totals"), dict) or not isinstance(
+        data.get("buckets"), list
+    ):
+        raise ApiError(502, BAD_UPSTREAM)
     return data
 
 
@@ -194,6 +182,8 @@ def make_handler(client: UsageClient):
                 self._json(e.status, {"error": e.message, "status": e.status})
             except ValueError:
                 self._json(400, {"error": "Invalid request.", "status": 400})
+            except (KeyError, TypeError, AttributeError):
+                self._json(502, {"error": BAD_UPSTREAM, "status": 502})
 
         def log_message(self, format, *args):  # noqa: A002
             pass
@@ -203,17 +193,17 @@ def make_handler(client: UsageClient):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--api-key", default=os.environ.get("OH_API_KEY"))
     parser.add_argument(
         "--base-url", default=os.environ.get("OH_API_BASE", DEFAULT_BASE_URL)
     )
     parser.add_argument("--org-id", default=os.environ.get("ORG_ID"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8501)))
     args = parser.parse_args()
-    if not args.api_key or not args.org_id:
+    api_key = os.environ.get("OH_API_KEY")
+    if not api_key or not args.org_id:
         sys.exit("Set OH_API_KEY and ORG_ID.")
 
-    client = UsageClient(args.base_url, args.api_key, args.org_id)
+    client = UsageClient(args.base_url, api_key, args.org_id)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(client))
     print(f"Dashboard: http://127.0.0.1:{args.port}")
     try:

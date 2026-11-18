@@ -6,7 +6,15 @@ from urllib.request import urlopen
 
 import pytest
 import usage_dashboard as ud
-from fixture_api import API_KEY, FULL, ORG_ID, PARTIAL, TOTALS_ONLY, FixtureApi
+from fixture_api import (
+    API_KEY,
+    FULL,
+    ORG_ID,
+    PARTIAL,
+    TOTALS_ONLY,
+    USAGE,
+    FixtureApi,
+)
 
 
 @pytest.fixture
@@ -76,10 +84,11 @@ def test_matches_tag():
     assert not ud.matches_tag({}, "team")
 
 
-def test_detail_off_returns_helpful_403(dashboard):
+def test_detail_403_names_setting_and_role(dashboard):
     status, body = get(f"{dashboard}/api/conversations/{FULL}/usage")
     assert status == 403
     assert "PATCH /api/organizations/{org_id}" in body["error"]
+    assert "Owner or Admin key" in body["error"]
 
 
 def test_detail_toggles_without_restart(api, dashboard):
@@ -89,18 +98,10 @@ def test_detail_toggles_without_restart(api, dashboard):
     assert get(f"{dashboard}/api/conversations/{FULL}/usage")[0] == 403
 
 
-def test_full_detail_reports_remainder_not_double_count(api, dashboard):
+def test_detail_returns_totals_and_buckets_unchanged(api, dashboard):
     api.detail_enabled = True
     _, d = get(f"{dashboard}/api/conversations/{FULL}/usage")
-    assert d["totals"]["cost"] == 1.25
-    assert d["unattributed"] == {
-        "cost": 0.0,
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "reasoning_tokens": 0,
-    }
+    assert d == USAGE[FULL]
 
 
 def test_partial_detail_keeps_unknown_distinct_from_zero(api, dashboard):
@@ -108,17 +109,34 @@ def test_partial_detail_keeps_unknown_distinct_from_zero(api, dashboard):
     _, d = get(f"{dashboard}/api/conversations/{PARTIAL}/usage")
     assert d["completeness"] == "partial"
     assert d["incomplete_reasons"] == ["task_usage_missing", "unknown_counters"]
-    assert d["unattributed"]["cache_read_tokens"] == 0
-    assert d["unattributed"]["cache_write_tokens"] is None
-    assert d["unattributed"]["reasoning_tokens"] is None
-    assert d["unattributed"]["prompt_tokens"] == 500
+    assert d["totals"]["reasoning_tokens"] is None
+    assert d["totals"]["cache_read_tokens"] == 0
 
 
-def test_totals_only_has_no_remainder(api, dashboard):
+def test_totals_only(api, dashboard):
     api.detail_enabled = True
     _, d = get(f"{dashboard}/api/conversations/{TOTALS_ONLY}/usage")
-    assert d["completeness"] == "totals_only"
-    assert d["buckets"] == [] and d["unattributed"] is None
+    assert (d["completeness"], d["buckets"]) == ("totals_only", [])
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        (302, {"Location": "http://127.0.0.1:9/steal"}, b""),
+        (200, {"Content-Type": "text/html"}, b"<html>proxy login</html>"),
+        (200, {"Content-Type": "application/json"}, b"[1, 2]"),
+        (200, {"Content-Type": "application/json"}, b'{"unexpected": true}'),
+        (500, {}, b"Traceback: secret detail"),
+    ],
+)
+def test_unexpected_upstream_is_a_sanitized_502(api, dashboard, raw):
+    api.raw_response = raw
+    api.detail_enabled = True
+    for path in ("/api/conversations", f"/api/conversations/{FULL}/usage"):
+        status, body = get(dashboard + path)
+        assert status == 502
+        assert "secret" not in body["error"] and "html" not in body["error"]
+    assert all("steal" not in r["path"] for r in api.requests)
 
 
 def test_missing_and_invalid_conversation(api, dashboard):

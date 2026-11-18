@@ -47,7 +47,7 @@
 const COUNTERS = ["cost", "prompt_tokens", "completion_tokens", "cache_read_tokens",
   "cache_write_tokens", "reasoning_tokens"];
 const HEADS = ["Cost", "Input", "Output", "Cache read", "Cache write", "Reasoning"];
-let page = 1, totalPages = 0, selected = null;
+let page = 1, totalPages = 0, listRequest = 0, detailRequest = 0;
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -85,11 +85,14 @@ async function loadList() {
   for (const [k, v] of [...params]) if (!v) params.delete(k);
   const status = document.getElementById("list-status");
   const rows = document.getElementById("rows");
+  const request = ++listRequest;
   rows.replaceChildren();
   document.getElementById("detail").replaceChildren();
-  selected = null;
+  detailRequest++;
+  status.textContent = "Loading…";
   try {
     const data = await getJson("/api/conversations?" + params);
+    if (request !== listRequest) return;
     totalPages = data.total_pages;
     document.getElementById("page").textContent =
       `Page ${data.page} of ${Math.max(data.total_pages, 1)} (${data.total_items} conversations)`;
@@ -115,6 +118,9 @@ async function loadList() {
       rows.append(tr);
     }
   } catch (e) {
+    if (request !== listRequest) return;
+    totalPages = 0;
+    document.getElementById("page").textContent = "";
     status.replaceChildren(el("div", e.message, "error"));
   }
   document.getElementById("prev").disabled = page <= 1;
@@ -124,26 +130,25 @@ async function loadList() {
 async function loadDetail(conv, tr) {
   document.querySelectorAll("tr.selected").forEach(r => r.classList.remove("selected"));
   tr.classList.add("selected");
-  selected = conv.id;
+  const request = ++detailRequest;
   const out = document.getElementById("detail");
   out.replaceChildren(el("h2", conv.title || "(untitled)"), el("p", "Loading usage…", "note"));
   let d;
   try {
     d = await getJson(`/api/conversations/${encodeURIComponent(conv.id)}/usage`);
   } catch (e) {
-    if (selected === conv.id) out.replaceChildren(el("h2", conv.title || "(untitled)"), el("div", e.message, "error"));
+    if (request === detailRequest) out.replaceChildren(el("h2", conv.title || "(untitled)"), el("div", e.message, "error"));
     return;
   }
-  if (selected !== conv.id) return;
+  if (request !== detailRequest) return;
   const reasons = d.incomplete_reasons.length ? ` (${d.incomplete_reasons.join(", ")})` : "";
   const parts = [el("h2", conv.title || "(untitled)"),
     el("p", `Completeness: ${d.completeness}${reasons}`, d.completeness === "full" ? "note" : "error")];
   const rows = [counterRow("Recorded total", ["", ""], d.totals)];
   d.buckets.forEach(b => rows.push(counterRow(b.kind, [b.task_id || "", b.model || "unknown"], b.usage)));
-  if (d.unattributed) rows.push(counterRow("Not in a bucket", ["", ""], d.unattributed));
   parts.push(table(["Part", "Task", "Model", ...HEADS], rows, 3));
   if (!d.buckets.length) parts.push(el("p", "No per-part breakdown was recorded; only totals are available.", "note"));
-  parts.push(el("p", "Buckets are parts of the recorded total. Reasoning tokens may already be counted in output tokens. \"unknown\" means not recorded; 0 means recorded as zero.", "note"));
+  parts.push(el("p", "Recorded totals and bucket values come from separate records and may not add up; check completeness. Reasoning tokens may already be counted in output tokens. \"unknown\" means not recorded; 0 means recorded as zero.", "note"));
   if (d.task_calls.length) {
     parts.push(el("h3", "Tasks"));
     parts.push(table(["Task", "Agent", "Status", "Resumed", "Started", "Ended", "Seconds"],

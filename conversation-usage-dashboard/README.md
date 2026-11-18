@@ -56,7 +56,7 @@ Dashboard: http://127.0.0.1:8501
 ```
 
 Open the URL, then select a conversation to see its breakdown. Use `--port` or
-`PORT` to change the port.
+`PORT` to change the port. The key is read only from `OH_API_KEY`.
 
 ## Turn On Detailed Usage
 
@@ -64,7 +64,7 @@ The conversation list works with the default settings. Detailed usage is off by
 default, and until it is on, selecting a conversation shows:
 
 ```text
-Detailed usage is off for this organization. An Owner or Admin can turn it on with PATCH /api/organizations/{org_id}.
+Detailed usage isn't available. It requires an Owner or Admin key, and an Owner or Admin must turn it on for the organization with PATCH /api/organizations/{org_id}.
 ```
 
 The dashboard doesn't change this setting. An Owner or Admin turns it on once,
@@ -84,10 +84,9 @@ request; the list and totals keep working. See
 
 ## Reading the Breakdown
 
-- **Recorded total** is the conversation's stored total. Each bucket is a part
-  of it, so buckets aren't added to the total.
-- **Not in a bucket** is the total minus the buckets. It is shown only when
-  every value is known.
+- **Recorded total** is the conversation's stored total. Bucket values come
+  from the latest usage snapshot, so they can differ from it. The dashboard
+  shows both as recorded and doesn't add them up.
 - **unknown** means the value wasn't recorded. `0` means it was recorded as
   zero.
 - **Reasoning** tokens may already be counted in output tokens.

@@ -149,6 +149,7 @@ class FixtureApi:
 
     def __init__(self, port=0):
         self.detail_enabled = False
+        self.raw_response: tuple[int, dict, bytes] | None = None
         self.requests: list[dict] = []
         self.server = ThreadingHTTPServer(("127.0.0.1", port), self._handler())
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -180,6 +181,13 @@ class FixtureApi:
                 if url.path == "/__fixture/detail":
                     fixture.detail_enabled = query.get("enabled") == "1"
                     return self._reply(200, {"enabled": fixture.detail_enabled})
+                if fixture.raw_response:
+                    status, headers, body = fixture.raw_response
+                    self.send_response(status)
+                    for name, value in headers.items():
+                        self.send_header(name, value)
+                    self.end_headers()
+                    return self.wfile.write(body)
                 if self.headers.get("Authorization") != f"Bearer {API_KEY}":
                     return self._reply(401, {"detail": "Unauthorized"})
                 base = f"/api/organizations/{ORG_ID}/conversations"
