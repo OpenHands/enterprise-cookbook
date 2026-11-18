@@ -1,3 +1,4 @@
+import http.client
 import json
 import threading
 from http.server import ThreadingHTTPServer
@@ -55,6 +56,46 @@ def test_list_paginates_and_sends_bearer_get(api, dashboard):
     assert {r["method"] for r in api.requests} == {"GET"}
     assert {r["auth"] for r in api.requests} == {f"Bearer {API_KEY}"}
     assert "page=2&per_page=20" in api.requests[-1]["path"]
+
+
+def raw_get(dashboard, path, hosts):
+    port = int(dashboard.rsplit(":", 1)[1])
+    conn = http.client.HTTPConnection("127.0.0.1", port)
+    conn.putrequest("GET", path, skip_host=True)
+    for host in hosts:
+        conn.putheader("Host", host)
+    conn.endheaders()
+    response = conn.getresponse()
+    body = json.loads(response.read())
+    conn.close()
+    return response.status, body
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1:{port}", "LOCALHOST:{port}"])
+def test_loopback_host_is_accepted(dashboard, host):
+    port = dashboard.rsplit(":", 1)[1]
+    status, _ = raw_get(dashboard, "/api/conversations", [host.format(port=port)])
+    assert status == 200
+
+
+@pytest.mark.parametrize(
+    "hosts",
+    [
+        ["attacker.example:{port}"],
+        ["localhost.attacker.example:{port}"],
+        ["127.0.0.1"],
+        ["127.0.0.1:1"],
+        [],
+        ["127.0.0.1:{port}", "attacker.example:{port}"],
+    ],
+)
+def test_other_hosts_are_rejected_before_any_upstream_call(api, dashboard, hosts):
+    port = dashboard.rsplit(":", 1)[1]
+    status, body = raw_get(
+        dashboard, "/api/conversations", [h.format(port=port) for h in hosts]
+    )
+    assert (status, body) == (403, {"error": "Forbidden host.", "status": 403})
+    assert api.requests == []
 
 
 def test_list_drops_fields_the_dashboard_does_not_need(dashboard):

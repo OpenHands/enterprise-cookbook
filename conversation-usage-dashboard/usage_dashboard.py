@@ -17,8 +17,13 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://app.all-hands.dev"
-# Set by the server, not by users; holds an internal sandbox path.
-ARCHIVE_TAG = "archiveworkspacepath"
+# Tags the server sets for its own use, not user tags.
+SERVER_TAGS = (
+    "archiveworkspacepath",
+    "acpserver",
+    "agentprofileid",
+    "agentprofilerevision",
+)
 LIST_FIELDS = (
     "id",
     "title",
@@ -129,7 +134,8 @@ def conversation_page(client: UsageClient, query: dict) -> dict:
     items = [{k: item.get(k) for k in LIST_FIELDS} for item in data["items"]]
     for item in items:
         if item["tags"]:
-            item["tags"].pop(ARCHIVE_TAG, None)
+            for key in SERVER_TAGS:
+                item["tags"].pop(key, None)
     tag = (query.get("tag") or "").strip()
     if tag:
         items = [i for i in items if matches_tag(i["tags"] or {}, tag)]
@@ -169,6 +175,13 @@ def make_handler(client: UsageClient):
             self._send(status, json.dumps(data).encode(), "application/json")
 
         def do_GET(self):
+            # Blocks DNS rebinding: only accept the exact loopback origin.
+            port = self.connection.getsockname()[1]
+            hosts = self.headers.get_all("Host") or []
+            allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if len(hosts) != 1 or hosts[0].strip().lower() not in allowed:
+                self._json(403, {"error": "Forbidden host.", "status": 403})
+                return
             url = urlparse(self.path)
             query = {k: v[0] for k, v in parse_qs(url.query).items()}
             parts = url.path.strip("/").split("/")

@@ -83,6 +83,11 @@ Keep the field name `tag` and send values such as `team=demo`; the existing
 Python filter will handle them. The tag filter checks only the loaded page,
 because the organization list API doesn't filter by tag.
 
+The status filter sends one `execution_status` value. The API accepts several
+statuses if you repeat the parameter, such as
+`execution_status=running&execution_status=paused`. Its reference describes a
+comma-separated list, but release 1.94.1 treats `running,paused` as one value.
+
 If you add usage calculations, keep conversation totals separate from their
 agent breakdown so you don't count the same usage twice. Keep the
 `completeness` indicator visible, and treat an unknown value differently from
@@ -111,6 +116,7 @@ curl --fail --silent --show-error -X PATCH \
 Set it to `false` to turn it off again. The change takes effect on the next
 request; the list and totals keep working. See
 [Conversation Usage Access](https://docs.openhands.dev/openhands/usage/cloud/organizations/roles-permissions#conversation-usage-access).
+That page calls the base URL `OH_BASE_URL`; this example uses `OH_API_BASE`.
 
 ## Try It With Synthetic Data
 

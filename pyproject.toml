@@ -60,7 +60,7 @@ lines-after-imports = 2
 
 [tool.pytest.ini_options]
 testpaths = ["conversation-metrics/tests", "org-admin/tests", "aws-secrets-sync", "conversation-usage-dashboard/tests"]
-pythonpath = ["org-admin", "conversation-usage-dashboard", "conversation-usage-dashboard/tests"]
+pythonpath = ["org-admin", "conversation-usage-dashboard"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -68,7 +68,7 @@ addopts = "-v --tb=short"
 
 [tool.pyright]
 include = ["conversation-metrics/oh_api", "conversation-metrics/tests", "org-admin", "aws-secrets-sync", "conversation-usage-dashboard"]
-extraPaths = ["conversation-metrics", "org-admin", "conversation-usage-dashboard", "conversation-usage-dashboard/tests"]
+extraPaths = ["conversation-metrics", "org-admin", "conversation-usage-dashboard"]
 pythonVersion = "3.10"
 typeCheckingMode = "standard"
 

@@ -141,6 +141,8 @@ async function loadDetail(conv, tr) {
     return;
   }
   if (request !== detailRequest) return;
+  d.incomplete_reasons ??= [];
+  d.task_calls ??= [];
   const reasons = d.incomplete_reasons.length ? ` (${d.incomplete_reasons.join(", ")})` : "";
   const parts = [el("h2", conv.title || "(untitled)"),
     el("p", `Completeness: ${d.completeness}${reasons}`, d.completeness === "full" ? "note" : "error")];
