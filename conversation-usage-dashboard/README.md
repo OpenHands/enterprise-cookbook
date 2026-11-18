@@ -111,6 +111,15 @@ curl "http://127.0.0.1:8600/__fixture/detail?enabled=1"   # fixture only
 
 Run the tests from the repository root with `uv run pytest conversation-usage-dashboard`.
 
+## Packaging and Agent Canvas
+
+The dashboard is a standalone HTML and JavaScript page served by a local Python
+backend. It isn't packaged or registered as an Agent Canvas extension. Embedding
+it later would need authenticated access to the organization APIs from the app
+server, with access controls that limit it to Owners and Admins. The Owner or
+Admin key must stay on the server and never move into browser code, and hiding
+a navigation item isn't authorization.
+
 ## APIs Used
 
 | Endpoint | Purpose |
