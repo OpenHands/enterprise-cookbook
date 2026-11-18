@@ -51,7 +51,11 @@ def _conversation(i: int) -> dict:
         "trigger": None,
         "pr_number": [],
         "pr_merged": None,
-        "tags": {"team": "alpha" if i % 2 else "beta", "env": "demo"},
+        "tags": {
+            "team": "alpha" if i % 2 else "beta",
+            "env": "demo",
+            "archiveworkspacepath": f"/workspace/project/synthetic{i}",
+        },
         "accumulated_cost": 1.25 if i == 1 else round(0.1 * i, 2),
         "prompt_tokens": 1000 * i,
         "completion_tokens": 100 * i,

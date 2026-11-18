@@ -60,6 +60,7 @@ def test_list_paginates_and_sends_bearer_get(api, dashboard):
 def test_list_drops_fields_the_dashboard_does_not_need(dashboard):
     _, page = get(f"{dashboard}/api/conversations")
     assert set(page["items"][0]) == set(ud.LIST_FIELDS)
+    assert page["items"][0]["tags"] == {"team": "alpha", "env": "demo"}
 
 
 def test_search_and_status_go_to_the_api(api, dashboard):

@@ -17,6 +17,8 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://app.all-hands.dev"
+# Set by the server, not by users; holds an internal sandbox path.
+ARCHIVE_TAG = "archiveworkspacepath"
 LIST_FIELDS = (
     "id",
     "title",
@@ -125,6 +127,9 @@ def conversation_page(client: UsageClient, query: dict) -> dict:
     if not isinstance(data.get("items"), list):
         raise ApiError(502, BAD_UPSTREAM)
     items = [{k: item.get(k) for k in LIST_FIELDS} for item in data["items"]]
+    for item in items:
+        if item["tags"]:
+            item["tags"].pop(ARCHIVE_TAG, None)
     tag = (query.get("tag") or "").strip()
     if tag:
         items = [i for i in items if matches_tag(i["tags"] or {}, tag)]
