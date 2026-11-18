@@ -1,35 +1,45 @@
 # Conversation Usage Dashboard
 
-Run a small local web page that lists every conversation in one organization and
-shows where a selected conversation's cost and tokens went: the main agent,
-sub-agent tasks, the condenser, and anything else recorded. Use it to find which
-parts of a run account for its usage.
+OpenHands provides usage dashboards, but organizations often want to customize
+them for their own needs. This recipe shows how to build your own dashboard,
+including per-agent usage details that help you decide which steps to optimize.
 
-It runs on its own, outside Agent Canvas. The dashboard only reads. It sends `GET` requests, never changes organization
-settings, and never starts, resumes, or stops a conversation.
+The example lists conversations across one organization. Select a conversation
+to see how its cost and tokens are split across the main agent, sub-agent tasks,
+and condenser. Use the example to understand how the API data becomes a
+dashboard, then adapt the view to what your team wants to track.
+
+It runs using a simple HTML page and a small Python server. The dashboard sends only `GET` requests. It does not affect any organization settings or conversations.
+
+## Screenshots
+
+These screenshots use made-up conversations and usage data.
+
+Filter the conversation list by search, status, and tags:
+
+![Conversation list showing titles, creators, status, tags, cost, and token usage](./images/conversation-list.png)
+
+Select a conversation to inspect its agent-level usage and task timing:
+
+![Conversation detail showing main-agent, sub-agent, and condenser usage, with task status and timing](./images/conversation-detail.png)
 
 ## How It Works
 
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant D as usage_dashboard.py
-    participant O as OpenHands API
-    B->>D: Load a page of conversations
-    D->>O: GET /api/organizations/{org_id}/conversations?page&per_page
-    O-->>D: Titles, tags, creators, status, totals
-    B->>D: Select a conversation
-    D->>O: GET /api/organizations/{org_id}/conversations/{conversation_id}/usage
-    O-->>D: Buckets, task calls, completeness
-```
+The browser displays the dashboard, and the Python server gets its data from
+OpenHands. The API key stays in Python; it isn't sent to the browser.
 
-- The API key stays in the Python process. The browser only talks to the
-  dashboard on `127.0.0.1`.
-- The list loads one page at a time. Detailed usage is fetched only for the
-  conversation you select.
-- Search and status filters are sent to the API. The organization list doesn't
-  filter by tag, so the tag filter applies to the conversations on the loaded
-  page, and the page says how many it checked.
+Two API calls drive the page:
+
+1. **List conversations.** `UsageClient.list_conversations()` in
+   [`usage_dashboard.py`](./usage_dashboard.py) fetches one page of conversations
+   with their titles, user tags, creators, status, and total usage. Search and
+   status filters are sent with this request.
+2. **Read a conversation's usage.** When you select a row,
+   `UsageClient.get_usage()` fetches its agent-level breakdown and task timing.
+   [`index.html`](./index.html) turns that response into the detail tables.
+
+The endpoint paths are listed under [APIs Used](#apis-used). Detailed usage is
+fetched only when you select a conversation.
 
 ## Prerequisites
 
@@ -58,6 +68,26 @@ Dashboard: http://127.0.0.1:8501
 Open the URL, then select a conversation to see its breakdown. Use `--port` or
 `PORT` to change the port. The key is read only from `OH_API_KEY`.
 
+## Customize the Dashboard
+
+Start with the part you want to change:
+
+| What You Want to Change | Where to Start |
+|---|---|
+| Columns, labels, filters, or layout | `loadList()` and `loadDetail()` in [`index.html`](./index.html) |
+| Fields passed to the page and tag filtering | `conversation_page()` in [`usage_dashboard.py`](./usage_dashboard.py) |
+| API requests for the list or selected conversation | `UsageClient` in [`usage_dashboard.py`](./usage_dashboard.py) |
+
+For example, replace the free-text tag filter with a dropdown of your teams.
+Keep the field name `tag` and send values such as `team=demo`; the existing
+Python filter will handle them. The tag filter checks only the loaded page,
+because the organization list API doesn't filter by tag.
+
+If you add usage calculations, keep conversation totals separate from their
+agent breakdown so you don't count the same usage twice. Keep the
+`completeness` indicator visible, and treat an unknown value differently from
+zero.
+
 ## Turn On Detailed Usage
 
 The conversation list works with the default settings. Detailed usage is off by
@@ -82,32 +112,33 @@ Set it to `false` to turn it off again. The change takes effect on the next
 request; the list and totals keep working. See
 [Conversation Usage Access](https://docs.openhands.dev/openhands/usage/cloud/organizations/roles-permissions#conversation-usage-access).
 
-## Reading the Breakdown
-
-- **Recorded total** is the conversation's stored total. Bucket values come
-  from the latest usage snapshot, so they can differ from it. The dashboard
-  shows both as recorded and doesn't add them up.
-- **unknown** means the value wasn't recorded. `0` means it was recorded as
-  zero.
-- **Reasoning** tokens may already be counted in output tokens.
-- **Completeness** is `full`, `partial`, or `totals_only`. When it isn't
-  `full`, the `incomplete_reasons` from the API are shown, such as
-  `task_usage_missing` or `no_stats_snapshot`.
-
-The usage response doesn't include prompts, messages, task descriptions, or
-tool inputs and outputs, and the dashboard doesn't request them.
-
 ## Try It With Synthetic Data
 
 [`tests/fixture_api.py`](./tests/fixture_api.py) serves made-up data in the
-same shape as the API, so you can try the page without a real organization:
+same shape as the API. Use it to explore the page and try changes without a
+real organization or API key.
+
+Install `requests` with `pip install requests`, then use two terminals.
+
+In one terminal, start the test API from this example's directory:
 
 ```bash
-python tests/fixture_api.py --port 8600 &
+python tests/fixture_api.py --port 8600
+```
+
+In a second terminal, start the dashboard from the same directory:
+
+```bash
 OH_API_KEY=synthetic-test-key ORG_ID=00000000-0000-4000-8000-0000000000aa \
   OH_API_BASE=http://127.0.0.1:8600 python usage_dashboard.py
-curl "http://127.0.0.1:8600/__fixture/detail?enabled=1"   # fixture only
 ```
+
+Open `http://127.0.0.1:8501` to see the list. To enable detailed usage in the
+test API, open `http://127.0.0.1:8600/__fixture/detail?enabled=1` in your browser,
+then return to the dashboard and select a conversation. This control changes
+only the test API. Use `enabled=0` to turn it off again.
+
+Press Ctrl+C in each terminal when you're finished.
 
 Run the tests from the repository root with `uv run pytest conversation-usage-dashboard`.
 
