@@ -35,6 +35,7 @@ Observe conversations and react to their state.
 | Example | Description |
 |---------|-------------|
 | [conversation-metrics](./conversation-metrics/) | CLI tool to retrieve cost and token usage for conversations |
+| [conversation-usage-dashboard](./conversation-usage-dashboard/) | Read-only local dashboard of an organization's conversations, with per-conversation usage by agent, task, and condenser |
 | [conversation-tags](./conversation-tags/) | Attach arbitrary key-value **metadata** to a conversation via `tags` (e.g. an external `environment_url`) and read it back from `AppConversation.tags` |
 | [react-to-state-websocket](./react-to-state-websocket/) | React to conversation `execution_status` changes over the agent-server **WebSocket** (`/sockets/events/{id}`) instead of polling — two approaches (Cloud-attach vs. agent-direct) with trade-offs, plus in-sandbox hook alternatives |
 | [watch-terminal-state](./watch-terminal-state/) | Deep dive on [react-to-state-websocket](./react-to-state-websocket/): detect a **confirmed terminal `execution_status`** over the WebSocket — handles both event shapes, treats `finished` as advisory (Stop-hook revertible), and uses log-safe first-message auth |
