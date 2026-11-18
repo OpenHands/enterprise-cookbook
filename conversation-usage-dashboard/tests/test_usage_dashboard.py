@@ -122,7 +122,7 @@ def test_totals_only(api, dashboard):
 @pytest.mark.parametrize(
     "raw",
     [
-        (302, {"Location": "http://127.0.0.1:9/steal"}, b""),
+        (302, {"Location": "/steal"}, b""),
         (200, {"Content-Type": "text/html"}, b"<html>proxy login</html>"),
         (200, {"Content-Type": "application/json"}, b"[1, 2]"),
         (200, {"Content-Type": "application/json"}, b'{"unexpected": true}'),
