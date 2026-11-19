@@ -1,0 +1,5 @@
+---
+title: Fetch Workspace Contents
+description: Copy the workspace files out of every sandbox on a Docker Compose install with docker cp.
+category: Sandbox lifecycle
+icon: download
